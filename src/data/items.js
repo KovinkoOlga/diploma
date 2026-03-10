@@ -11,7 +11,7 @@ export const initialItems = [
     categoryId: "tops",
     colors: ["белый"],
     season: ["весна", "лето", "осень"],
-    tags: ["office", "casual"],
+    tags: ["office", "classic"],
     image: placeholderImage,
     wearCount: 12,
     lastWorn: "2026-01-27",
@@ -78,7 +78,7 @@ export const initialItems = [
   },
   {
     id: "item_7",
-    title: "Сумка кросс-боди",
+    title: "Сумка cross-body",
     brand: "Coach",
     categoryId: "bags",
     colors: ["черный"],
@@ -138,7 +138,7 @@ export const initialItems = [
   },
   {
     id: "item_12",
-    title: "Платье",
+    title: "Черное платье",
     brand: "Reserved",
     categoryId: "tops",
     colors: ["черный"],
@@ -149,4 +149,3 @@ export const initialItems = [
     lastWorn: "2025-12-30",
   },
 ];
-

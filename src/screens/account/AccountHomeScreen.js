@@ -1,166 +1,109 @@
-import React, { useLayoutEffect, useMemo } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useMemo, useState } from "react";
+import { Text, View } from "react-native";
 import Screen from "../../components/Screen";
-import Card from "../../components/Card";
+import AppHeader from "../../components/AppHeader";
+import ActionButton from "../../components/ActionButton";
+import ProfileHeader from "../../components/ProfileHeader";
+import Chip from "../../components/Chip";
+import OutfitCard from "../../components/OutfitCard";
+import WardrobeItemCard from "../../components/WardrobeItemCard";
+import FeedCard from "../../components/FeedCard";
 import SectionHeader from "../../components/SectionHeader";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { useWardrobe } from "../../store/WardrobeStore";
-import { categories } from "../../data/categories";
 import { Routes } from "../../navigation/routes";
 
 export default function AccountHomeScreen({ navigation }) {
-  const { colors, spacing, typography, radius } = useAppTheme();
-  const { items, outfits } = useWardrobe();
+  const { colors, typography, spacing } = useAppTheme();
+  const { items, outfits, feedPosts } = useWardrobe();
+  const [activeTab, setActiveTab] = useState("looks");
+  const itemById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
+  const savedPosts = feedPosts.filter((post) => post.saved);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable onPress={() => navigation.navigate(Routes.Settings)} style={{ padding: 6 }}>
-          <Ionicons name="settings-outline" size={20} color={colors.text} />
-        </Pressable>
-      ),
-    });
-  }, [navigation, colors.text]);
-
-  const stats = useMemo(() => {
-    const totalItems = items.length;
-    const totalOutfits = outfits.length;
-    const counts = items.reduce((acc, it) => {
-      acc[it.categoryId] = (acc[it.categoryId] ?? 0) + 1;
-      return acc;
-    }, {});
-    const topCategoryId =
-      Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? categories[0]?.id;
-    const topCategory = categories.find((c) => c.id === topCategoryId)?.title ?? "—";
-    const mostWorn =
-      items.slice().sort((a, b) => (b.wearCount ?? 0) - (a.wearCount ?? 0))[0]?.title ?? "—";
-    return { totalItems, totalOutfits, topCategory, mostWorn };
-  }, [items, outfits]);
+  const stats = [
+    { label: "вещей", value: items.length },
+    { label: "образов", value: outfits.length },
+    { label: "сохранено", value: savedPosts.length },
+  ];
 
   return (
-    <Screen>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 160 }}
-        style={{ flex: 1 }}
-      >
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-          <Card style={{ padding: spacing.md }} variant="flat">
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: radius.lg,
-                  backgroundColor: colors.chipBg,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="person-outline" size={22} color={colors.icon} />
-              </View>
-              <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                <Text
-                  style={{
-                    color: colors.text,
-                    ...typography.h3,
-                  }}
-                >
-                  Оля
-                </Text>
-                <Text style={[typography.caption, { marginTop: 4, color: colors.mutedText }]}>
-                  “Собираю капсулу на сезон”
-                </Text>
-              </View>
-            </View>
-          </Card>
-
-          <SectionHeader title="Статистика" />
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <StatCard label="Вещей" value={stats.totalItems} />
-            <StatCard label="Образов" value={stats.totalOutfits} />
-          </View>
-          <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
-            <StatCard label="Топ-категория" value={stats.topCategory} flex={1.4} />
-            <StatCard label="Чаще всего" value={stats.mostWorn} flex={1.6} />
-          </View>
-
-          <SectionHeader title="Профиль" />
-          <View style={{ gap: spacing.sm }}>
-            <Row icon="heart-outline" title="Мои предпочтения" subtitle="Цвета, стили, бренды (заглушка)" />
-            <Row icon="flag-outline" title="Цели гардероба" subtitle="Капсула, покупки, план (заглушка)" />
-            <Row
-              icon="settings-outline"
-              title="Настройки"
-              subtitle="Тема, уведомления (заглушка)"
-              onPress={() => navigation.navigate(Routes.Settings)}
-            />
-          </View>
-        </View>
-      </ScrollView>
-    </Screen>
-  );
-}
-
-function StatCard({ label, value, flex = 1 }) {
-  const { colors, spacing, typography } = useAppTheme();
-  return (
-    <Card style={{ flex, padding: spacing.md }} variant="flat">
-      <Text style={[typography.caption, { color: colors.mutedText, letterSpacing: 0.8, textTransform: "uppercase" }]}>
-        {label}
-      </Text>
-      <Text
-        numberOfLines={1}
-        style={{
-          marginTop: 6,
-          color: colors.text,
-          ...typography.h3,
-        }}
-      >
-        {String(value)}
-      </Text>
-    </Card>
-  );
-}
-
-function Row({ icon, title, subtitle, onPress }) {
-  const { colors, spacing, typography, radius } = useAppTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [{ opacity: onPress ? (pressed ? 0.92 : 1) : 1 }]}
-      disabled={!onPress}
+    <Screen
+      scroll
+      padded
+      header={
+        <AppHeader
+          title="olya.style"
+          subtitle="личный профиль"
+          right={<ActionButton icon="settings-outline" compact variant="ghost" onPress={() => navigation.navigate(Routes.Settings)} />}
+        />
+      }
     >
-      <Card style={{ padding: spacing.md }} variant="flat">
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: radius.md,
-              backgroundColor: colors.card2,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name={icon} size={18} color={colors.icon} />
-          </View>
-          <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={[typography.body, { color: colors.text, fontWeight: typography.weights.medium }]}>
-              {title}
-            </Text>
-            <Text style={[typography.caption, { marginTop: 4, color: colors.mutedText }]}>
-              {subtitle}
-            </Text>
-          </View>
-          {onPress ? <Ionicons name="chevron-forward" size={18} color={colors.mutedText} /> : null}
+      <ProfileHeader
+        name="Оля"
+        handle="@olya.style"
+        bio="Собираю спокойный городской гардероб и сохраняю рабочие сочетания на каждый день."
+        avatarLabel="Оля"
+        stats={stats}
+        onPrimaryPress={() => navigation.navigate(Routes.Settings)}
+        onSecondaryPress={() => navigation.navigate("NewsTab")}
+      />
+
+      <View style={{ marginTop: spacing.lg }}>
+        <SectionHeader title="Контент" />
+        <View style={{ flexDirection: "row", gap: 8, marginTop: spacing.sm }}>
+          <Chip label="Образы" selected={activeTab === "looks"} onPress={() => setActiveTab("looks")} />
+          <Chip label="Вещи" selected={activeTab === "items"} onPress={() => setActiveTab("items")} />
+          <Chip label="Сохранено" selected={activeTab === "saved"} onPress={() => setActiveTab("saved")} />
         </View>
-      </Card>
-    </Pressable>
+      </View>
+
+      {activeTab === "looks" ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }}>
+          {outfits.map((outfit) => (
+            <View key={outfit.id} style={{ width: "48%" }}>
+              <OutfitCard
+                outfit={outfit}
+                items={outfit.itemIds.map((id) => itemById[id]).filter(Boolean)}
+                onPress={() => navigation.navigate("OutfitsTab", { screen: Routes.OutfitDetails, params: { outfitId: outfit.id } })}
+              />
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {activeTab === "items" ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          {items.slice(0, 6).map((item) => (
+            <WardrobeItemCard
+              key={item.id}
+              item={item}
+              variant="list"
+              onPress={() => navigation.navigate("WardrobeTab", { screen: Routes.ItemDetails, params: { itemId: item.id } })}
+            />
+          ))}
+        </View>
+      ) : null}
+
+      {activeTab === "saved" ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.md }}>
+          {savedPosts.map((post) => (
+            <FeedCard
+              key={post.id}
+              eyebrow={`${post.category} · ${post.timeAgo}`}
+              title={post.title}
+              summary={post.text}
+              meta={`${post.likes} лайков · ${post.source}`}
+              image={itemById[outfits.find((outfit) => outfit.id === post.outfitId)?.itemIds?.[0]]?.image ?? items[0]?.image}
+              actionLabel="Открыть"
+              onPress={() => navigation.navigate("NewsTab", { screen: Routes.PostDetails, params: { postId: post.id } })}
+              onActionPress={() => navigation.navigate("NewsTab", { screen: Routes.PostDetails, params: { postId: post.id } })}
+            />
+          ))}
+          {savedPosts.length === 0 ? (
+            <Text style={[typography.body, { color: colors.secondaryText }]}>Пока ничего не сохранено.</Text>
+          ) : null}
+        </View>
+      ) : null}
+    </Screen>
   );
 }

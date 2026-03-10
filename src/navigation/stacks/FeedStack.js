@@ -7,27 +7,24 @@ import { useAppTheme } from "../../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator();
 
-export default function FeedStack() {
+export default function NewsStack() {
   const theme = useAppTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.bg },
-        headerTitleStyle: {
-          ...theme.typography.h3,
-          color: theme.colors.text,
-        },
+        headerStyle: { backgroundColor: theme.colors.background },
+        headerTitleStyle: { ...theme.typography.headerTitle, color: theme.colors.text },
         headerTintColor: theme.colors.text,
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: theme.colors.bg },
+        headerBackTitleVisible: false,
+        headerTitleAlign: "center",
+        animation: "slide_from_right",
+        contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
-      <Stack.Screen name={Routes.FeedHome} component={FeedHomeScreen} options={{ title: "Лента" }} />
-      <Stack.Screen
-        name={Routes.PostDetails}
-        component={PostDetailsScreen}
-        options={{ title: "Пост" }}
-      />
+      <Stack.Screen name={Routes.NewsHome} component={FeedHomeScreen} options={{ headerShown: false }} />
+      <Stack.Screen name={Routes.PostDetails} component={PostDetailsScreen} options={{ title: "Публикация" }} />
     </Stack.Navigator>
   );
 }

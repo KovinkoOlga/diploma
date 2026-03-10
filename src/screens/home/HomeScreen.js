@@ -1,160 +1,178 @@
-import React, { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import React, { useMemo } from "react";
+import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Screen from "../../components/Screen";
-import WeatherWidget from "../../components/WeatherWidget";
-import CalendarStrip from "../../components/CalendarStrip";
-import Card from "../../components/Card";
+import AppHeader from "../../components/AppHeader";
+import ActionButton from "../../components/ActionButton";
+import FeedCard from "../../components/FeedCard";
 import SectionHeader from "../../components/SectionHeader";
-import PrimaryButton from "../../components/PrimaryButton";
+import Chip from "../../components/Chip";
 import { useAppTheme } from "../../theme/ThemeProvider";
-import { formatLongRuDate, toISODate } from "../../utils/formatDate";
-import { homeTips, homeWeatherMock } from "../../data/home";
+import { homeTips, homeWeatherMock, quickMoments } from "../../data/home";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
 
 export default function HomeScreen({ navigation }) {
-  const { colors, spacing, typography, radius } = useAppTheme();
-  const { outfits } = useWardrobe();
+  const { colors, typography, spacing, radius } = useAppTheme();
+  const { outfits, items, feedPosts } = useWardrobe();
 
-  const [selectedDayKey, setSelectedDayKey] = useState(toISODate(new Date()));
-
-  const greetingName = "Оля";
-  const dateLine = useMemo(() => {
-    const d = formatLongRuDate(new Date());
-    return d.charAt(0).toUpperCase() + d.slice(1);
-  }, []);
-
-  const tip = useMemo(() => homeTips[Math.floor(Math.random() * homeTips.length)], []);
+  const itemById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
   const suggestedOutfit = outfits[0];
+  const featuredPost = feedPosts[0];
+  const secondaryPost = feedPosts[1];
+  const tip = homeTips[1];
+
+  const featuredImage = suggestedOutfit?.itemIds?.[0] ? itemById[suggestedOutfit.itemIds[0]]?.image : items[0]?.image;
+  const secondaryImage = secondaryPost?.outfitId
+    ? itemById[outfits.find((outfit) => outfit.id === secondaryPost.outfitId)?.itemIds?.[0]]?.image
+    : items[1]?.image;
 
   return (
-    <Screen>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 140 }}
-        style={{ flex: 1 }}
-      >
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.lg }}>
-          <Text
-            style={[
-              typography.caption,
-              { color: colors.mutedText, letterSpacing: 0.9, textTransform: "uppercase" },
-            ]}
+    <Screen
+      scroll
+      padded
+      header={
+        <AppHeader
+          title="lookbook"
+          subtitle="для гардероба и образов"
+          right={
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <ActionButton icon="heart-outline" compact variant="ghost" onPress={() => navigation.navigate("NewsTab")} />
+              <ActionButton icon="paper-plane-outline" compact variant="ghost" onPress={() => navigation.navigate("AccountTab")} />
+            </View>
+          }
+        />
+      }
+    >
+      <View>
+        <Text style={[typography.screenTitle, { color: colors.text }]}>Сегодняшний ритм</Text>
+        <Text style={[typography.body, { color: colors.secondaryText, marginTop: 6 }]}>
+          {homeWeatherMock.city} · {homeWeatherMock.temperatureC}° · {homeWeatherMock.condition}
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: spacing.md }}>
+        {quickMoments.map((moment) => (
+          <View
+            key={moment.id}
+            style={{
+              minWidth: "48%",
+              flex: 1,
+              padding: spacing.md,
+              borderRadius: radius.lg,
+              backgroundColor: colors.secondaryBackground,
+            }}
           >
-            Доброе утро, {greetingName}
-          </Text>
-          <Text
-            style={[typography.h1, { marginTop: spacing.xs, color: colors.text }]}
-          >
-            {dateLine}
-          </Text>
-        </View>
+            <Text style={[typography.cardTitle, { color: colors.text }]}>{moment.title}</Text>
+            <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 4 }]}>{moment.subtitle}</Text>
+          </View>
+        ))}
+      </View>
 
-        <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.lg }}>
-          <WeatherWidget weather={homeWeatherMock} />
+      <View style={{ marginTop: spacing.lg }}>
+        <SectionHeader title="Быстрые действия" />
+        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+          <ActionButton
+            label="Добавить вещь"
+            icon="add-outline"
+            variant="primary"
+            onPress={() => navigation.navigate("WardrobeTab", { screen: Routes.AddItem })}
+            style={{ flex: 1 }}
+            fullWidth
+          />
+          <ActionButton
+            label="Собрать образ"
+            icon="sparkles-outline"
+            variant="secondary"
+            onPress={() => navigation.navigate("OutfitsTab", { screen: Routes.OutfitEditor })}
+            style={{ flex: 1 }}
+            fullWidth
+          />
         </View>
+      </View>
 
-        <View style={{ paddingHorizontal: spacing.md }}>
-          <SectionHeader title="Ближайшие дни" />
-        </View>
-        <CalendarStrip selectedKey={selectedDayKey} onSelect={setSelectedDayKey} />
-
-        <View style={{ paddingHorizontal: spacing.md }}>
-          <SectionHeader title="Совет на сегодня" />
-          <Card style={{ padding: spacing.md }} variant="flat">
-            <Text style={[typography.body, { color: colors.text }]}>{tip}</Text>
-            <View
-              style={{
-                marginTop: spacing.md,
-                padding: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.card2,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-            >
-              <Text
-                style={[typography.h3, { color: colors.text }]}
-              >
-                Подходит: {suggestedOutfit?.title ?? "—"}
-              </Text>
-              <Text style={[typography.caption, { marginTop: 4, color: colors.mutedText }]}>
-                {suggestedOutfit ? `${suggestedOutfit.itemIds.length} вещей · ${suggestedOutfit.tags.join(", ")}` : ""}
-              </Text>
-              <PrimaryButton
-                title="Открыть образ"
-                icon="open-outline"
-                disabled={!suggestedOutfit}
-                style={{ marginTop: spacing.md }}
-                onPress={() => {
-                  if (!suggestedOutfit) return;
-                  navigation.navigate("OutfitsTab", {
+      <View style={{ marginTop: spacing.lg }}>
+        <SectionHeader title="Рекомендация на сегодня" actionLabel="Открыть шкаф" onAction={() => navigation.navigate("WardrobeTab")} />
+        <View style={{ marginTop: spacing.sm }}>
+          <FeedCard
+            eyebrow="Персональная подборка"
+            title={suggestedOutfit?.title ?? "Новый образ"}
+            summary={tip}
+            meta={`${suggestedOutfit?.itemIds?.length ?? 0} вещей · ${(suggestedOutfit?.tags ?? []).join(", ")}`}
+            image={featuredImage}
+            actionLabel="Смотреть"
+            onPress={() =>
+              suggestedOutfit
+                ? navigation.navigate("OutfitsTab", {
                     screen: Routes.OutfitDetails,
                     params: { outfitId: suggestedOutfit.id },
-                  });
-                }}
-              />
-            </View>
-          </Card>
+                  })
+                : null
+            }
+            onActionPress={() =>
+              suggestedOutfit
+                ? navigation.navigate("OutfitsTab", {
+                    screen: Routes.OutfitDetails,
+                    params: { outfitId: suggestedOutfit.id },
+                  })
+                : null
+            }
+          />
         </View>
+      </View>
 
-        <View style={{ paddingHorizontal: spacing.md }}>
-          <SectionHeader title="Быстрые действия" />
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <QuickAction
-              title="Добавить вещь"
-              icon="add-circle-outline"
+      <View style={{ marginTop: spacing.lg }}>
+        <SectionHeader title="Сейчас в ленте" actionLabel="Все новости" onAction={() => navigation.navigate("NewsTab")} />
+        <View style={{ marginTop: spacing.sm, gap: spacing.md }}>
+          {[featuredPost, secondaryPost].filter(Boolean).map((post) => (
+            <FeedCard
+              key={post.id}
+              eyebrow={`${post.category} · ${post.timeAgo}`}
+              title={post.title}
+              summary={post.text}
+              meta={`${post.likes} лайков · ${post.source}`}
+              image={post.id === featuredPost.id ? featuredImage : secondaryImage}
+              actionLabel="Читать"
               onPress={() =>
-                navigation.navigate("WardrobeTab", { screen: Routes.AddItem, params: { from: "home" } })
+                navigation.navigate("NewsTab", {
+                  screen: Routes.PostDetails,
+                  params: { postId: post.id },
+                })
+              }
+              onActionPress={() =>
+                navigation.navigate("NewsTab", {
+                  screen: Routes.PostDetails,
+                  params: { postId: post.id },
+                })
               }
             />
-            <QuickAction
-              title="Создать образ"
-              icon="sparkles-outline"
-              onPress={() =>
-                navigation.navigate("OutfitsTab", { screen: Routes.OutfitEditor, params: { mode: "create" } })
-              }
-            />
-            <QuickAction
-              title="Сканировать"
-              icon="scan-outline"
-              onPress={() => Alert.alert("Сканирование", "Заглушка UI: подключим expo-image-picker позже.")}
-            />
-          </View>
+          ))}
         </View>
-      </ScrollView>
+      </View>
+
+      <View style={{ marginTop: spacing.lg }}>
+        <SectionHeader title="Подходит под погоду" />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: spacing.sm }}>
+          {["слойность", "пальто", "нейтральная база", "комфортная обувь"].map((label) => (
+            <Chip key={label} label={label} />
+          ))}
+        </View>
+        <View
+          style={{
+            marginTop: spacing.sm,
+            padding: spacing.md,
+            borderRadius: radius.lg,
+            backgroundColor: colors.secondaryBackground,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <Ionicons name="cloud-outline" size={20} color={colors.text} />
+          <Text style={[typography.body, { color: colors.text, marginLeft: 10, flex: 1 }]}>
+            Температура ощущается как {homeWeatherMock.feelsLikeC}°. Лучше оставить один внешний слой и мягкую обувь.
+          </Text>
+        </View>
+      </View>
     </Screen>
-  );
-}
-
-function QuickAction({ title, icon, onPress }) {
-  const { colors, spacing, typography, radius } = useAppTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        {
-          flex: 1,
-          padding: spacing.md,
-          borderRadius: radius.md,
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          opacity: pressed ? 0.92 : 1,
-        },
-      ]}
-    >
-      <Ionicons name={icon} size={18} color={colors.icon} />
-      <Text
-        style={[
-          typography.caption,
-          { marginTop: spacing.sm, color: colors.text, fontWeight: typography.weights.medium },
-        ]}
-        numberOfLines={2}
-      >
-        {title}
-      </Text>
-    </Pressable>
   );
 }

@@ -1,42 +1,43 @@
 import React from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 
-export default function Chip({ label, selected = false, onPress, style }) {
-  const { colors, radius, spacing, typography } = useAppTheme();
+export default function Chip({ label, selected = false, compact = false, onPress }) {
+  const { colors, typography, radius, spacing } = useAppTheme();
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.base,
-        {
-          paddingHorizontal: spacing.sm,
-          borderRadius: radius.pill,
-          backgroundColor: selected ? colors.accentSoft : colors.chipBg,
-          borderColor: selected ? colors.accent : colors.border,
-          opacity: pressed ? 0.92 : 1,
-        },
-        style,
-      ]}
-    >
-      <Text
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1 }]}>
+      <View
         style={[
-          typography.caption,
+          styles.chip,
           {
-            color: selected ? colors.accent : colors.chipText,
+            minHeight: compact ? 28 : 34,
+            paddingHorizontal: compact ? spacing.sm : spacing.md,
+            backgroundColor: selected ? colors.chipActiveBackground : colors.chipBackground,
+            borderColor: selected ? colors.chipActiveBackground : colors.border,
+            borderRadius: radius.pill,
           },
         ]}
       >
-        {label}
-      </Text>
+        <Text
+          style={[
+            compact ? typography.meta : typography.caption,
+            {
+              color: selected ? colors.chipActiveText : colors.chipText,
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: {
-    paddingVertical: 7,
+  chip: {
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: StyleSheet.hairlineWidth,
-    borderStyle: "dashed",
   },
 });

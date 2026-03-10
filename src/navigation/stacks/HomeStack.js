@@ -8,20 +8,21 @@ const Stack = createNativeStackNavigator();
 
 export default function HomeStack() {
   const theme = useAppTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.bg },
-        headerTitleStyle: {
-          ...theme.typography.h3,
-          color: theme.colors.text,
-        },
+        headerStyle: { backgroundColor: theme.colors.background },
+        headerTitleStyle: { ...theme.typography.headerTitle, color: theme.colors.text },
         headerTintColor: theme.colors.text,
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: theme.colors.bg },
+        headerBackTitleVisible: false,
+        headerTitleAlign: "center",
+        animation: "slide_from_right",
+        contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
-      <Stack.Screen name={Routes.Home} component={HomeScreen} options={{ title: "Главная" }} />
+      <Stack.Screen name={Routes.Home} component={HomeScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }

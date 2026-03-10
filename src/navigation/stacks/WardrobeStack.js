@@ -11,35 +11,24 @@ const Stack = createNativeStackNavigator();
 
 export default function WardrobeStack() {
   const theme = useAppTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: theme.colors.bg },
-        headerTitleStyle: {
-          ...theme.typography.h3,
-          color: theme.colors.text,
-        },
+        headerStyle: { backgroundColor: theme.colors.background },
+        headerTitleStyle: { ...theme.typography.headerTitle, color: theme.colors.text },
         headerTintColor: theme.colors.text,
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: theme.colors.bg },
+        headerBackTitleVisible: false,
+        headerTitleAlign: "center",
+        animation: "slide_from_right",
+        contentStyle: { backgroundColor: theme.colors.background },
       }}
     >
-      <Stack.Screen
-        name={Routes.WardrobeHome}
-        component={WardrobeHomeScreen}
-        options={{ title: "Шкаф" }}
-      />
+      <Stack.Screen name={Routes.WardrobeHome} component={WardrobeHomeScreen} options={{ headerShown: false }} />
       <Stack.Screen name={Routes.Category} component={CategoryScreen} options={{ title: "Категория" }} />
-      <Stack.Screen
-        name={Routes.ItemDetails}
-        component={ItemDetailsScreen}
-        options={{ title: "Вещь" }}
-      />
-      <Stack.Screen
-        name={Routes.AddItem}
-        component={AddItemScreen}
-        options={{ title: "Добавить вещь" }}
-      />
+      <Stack.Screen name={Routes.ItemDetails} component={ItemDetailsScreen} options={{ title: "Вещь" }} />
+      <Stack.Screen name={Routes.AddItem} component={AddItemScreen} options={{ title: "Новая вещь" }} />
     </Stack.Navigator>
   );
 }

@@ -4,23 +4,23 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 export default function FAB({ onPress, icon = "add", style }) {
-  const { colors, radius, shadows } = useAppTheme();
+  const { colors, spacing, radius } = useAppTheme();
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
         {
-          borderRadius: radius.pill,
-          backgroundColor: colors.surface,
+          opacity: pressed ? 0.85 : 1,
+          backgroundColor: colors.card,
           borderColor: colors.border,
-          opacity: pressed ? 0.92 : 1,
-          ...shadows.tabBar,
+          borderRadius: radius.pill,
+          padding: spacing.sm,
         },
         style,
       ]}
     >
-      <Ionicons name={icon} size={22} color={colors.accent} />
+      <Ionicons name={icon} size={22} color={colors.text} />
     </Pressable>
   );
 }
@@ -30,8 +30,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 16,
     bottom: 110,
-    width: 48,
-    height: 48,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: StyleSheet.hairlineWidth,

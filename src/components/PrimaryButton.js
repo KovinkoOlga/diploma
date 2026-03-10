@@ -11,7 +11,7 @@ export default function PrimaryButton({
   disabled = false,
   style,
 }) {
-  const { colors, radius, spacing, typography } = useAppTheme();
+  const { colors, spacing, typography, radius } = useAppTheme();
 
   const palette = getPalette({ colors, variant });
 
@@ -22,21 +22,28 @@ export default function PrimaryButton({
       style={({ pressed }) => [
         styles.base,
         {
-          height: 46,
-          borderRadius: radius.pill,
+          opacity: disabled ? 0.45 : pressed ? 0.75 : 1,
           backgroundColor: palette.bg,
           borderColor: palette.border,
+          borderRadius: radius.pill,
+          paddingVertical: spacing.sm,
           paddingHorizontal: spacing.md,
-          opacity: disabled ? 0.45 : pressed ? 0.92 : 1,
         },
         style,
       ]}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        {icon ? <Ionicons name={icon} size={18} color={palette.text} /> : null}
-        <Text style={[typography.body, { color: palette.text, fontWeight: typography.weights.medium }]}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Text style={[typography.sectionTitle, { color: palette.text }]} numberOfLines={1}>
           {title}
         </Text>
+        {icon ? (
+          <Ionicons
+            name={icon}
+            size={16}
+            color={palette.text}
+            style={{ marginLeft: spacing.xs, opacity: 0.8 }}
+          />
+        ) : null}
       </View>
     </Pressable>
   );
@@ -44,6 +51,12 @@ export default function PrimaryButton({
 
 function getPalette({ colors, variant }) {
   switch (variant) {
+    case "secondary":
+      return {
+        bg: colors.bg2 ?? colors.card2,
+        text: colors.text,
+        border: colors.border,
+      };
     case "ghost":
       return {
         bg: "transparent",
@@ -52,24 +65,23 @@ function getPalette({ colors, variant }) {
       };
     case "danger":
       return {
-        bg: colors.dangerSoft,
-        text: colors.danger,
+        bg: colors.danger,
+        text: "#FFFFFF",
         border: colors.danger,
       };
     case "primary":
     default:
       return {
-        bg: colors.accentSoft,
-        text: colors.text,
-        border: colors.accent,
+        bg: colors.text,
+        text: colors.bg,
+        border: colors.text,
       };
   }
 }
 
 const styles = StyleSheet.create({
   base: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignSelf: "flex-start",
     borderWidth: StyleSheet.hairlineWidth,
   },
 });

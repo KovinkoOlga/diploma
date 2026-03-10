@@ -1,20 +1,21 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 export default function SegmentedControl({ options, value, onChange }) {
-  const { colors, radius, spacing, typography } = useAppTheme();
+  const { colors, spacing, typography, radius } = useAppTheme();
 
   return (
     <View
-      style={{
-        flexDirection: "row",
-        backgroundColor: colors.surface,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.pill,
-        padding: 4,
-      }}
+      style={[
+        styles.wrap,
+        {
+          backgroundColor: colors.bg2 ?? colors.card2,
+          borderColor: colors.border,
+          borderRadius: radius.pill,
+          padding: 2,
+        },
+      ]}
     >
       {options.map((opt) => {
         const selected = opt.value === value;
@@ -23,24 +24,15 @@ export default function SegmentedControl({ options, value, onChange }) {
             key={opt.value}
             onPress={() => onChange(opt.value)}
             style={({ pressed }) => [
+              styles.tab,
               {
-                flex: 1,
-                paddingVertical: 10,
+                opacity: pressed ? 0.85 : 1,
+                backgroundColor: selected ? colors.card : "transparent",
                 borderRadius: radius.pill,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: selected ? colors.card2 : "transparent",
-                opacity: pressed ? 0.9 : 1,
               },
             ]}
           >
-            <Text
-              style={{
-                color: selected ? colors.text : colors.mutedText,
-                ...typography.caption,
-                fontWeight: selected ? typography.weights.medium : typography.weights.regular,
-              }}
-            >
+            <Text style={[typography.caption, { color: selected ? colors.text : colors.mutedText }]}>
               {opt.label}
             </Text>
           </Pressable>
@@ -49,3 +41,15 @@ export default function SegmentedControl({ options, value, onChange }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  tab: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+});

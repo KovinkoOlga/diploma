@@ -1,40 +1,43 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Card from "./Card";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 export default function WeatherWidget({ weather }) {
-  const { colors, spacing, typography } = useAppTheme();
+  const { colors, spacing, typography, radius } = useAppTheme();
+
   return (
-    <Card style={{ padding: spacing.md }} variant="flat">
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+    <View
+      style={[
+        styles.wrap,
+        {
+          backgroundColor: colors.bg2 ?? colors.card2,
+          borderColor: colors.border,
+          borderRadius: radius.md,
+          padding: spacing.md,
+        },
+      ]}
+    >
+      <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
         <View style={{ flex: 1, paddingRight: spacing.md }}>
-          <Text style={[typography.caption, { color: colors.mutedText, letterSpacing: 0.8, textTransform: "uppercase" }]}>
-            Погода сегодня · {weather.city}
+          <Text style={[typography.caption, { color: colors.mutedText }]} numberOfLines={1}>
+            Погода · {weather.city}
           </Text>
-          <Text style={[typography.h2, { marginTop: spacing.xs, color: colors.text }]}>
+          <Text style={[typography.h1, { marginTop: spacing.xs, color: colors.text }]}>
             {weather.temperatureC}°C
           </Text>
-          <Text style={[typography.body, { marginTop: 2, color: colors.mutedText }]}>
+          <Text style={[typography.body, { marginTop: 2, color: colors.mutedText }]} numberOfLines={2}>
             {weather.condition} · ощущается {weather.feelsLikeC}°C
           </Text>
         </View>
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 16,
-            backgroundColor: colors.chipBg,
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name={weather.icon} size={22} color={colors.icon} />
-        </View>
+        <Ionicons name={weather.icon} size={18} color={colors.mutedText} />
       </View>
-    </Card>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  wrap: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+});

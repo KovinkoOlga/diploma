@@ -1,11 +1,15 @@
-/** @typedef {{ id: string; author: string; text: string; tags: string[]; outfitId?: string; likes: number; saved: boolean }} FeedPost */
+/** @typedef {{ id: string; author: string; source: string; title: string; text: string; category: string; timeAgo: string; tags: string[]; outfitId?: string; likes: number; saved: boolean }} FeedPost */
 
 /** @type {FeedPost[]} */
 export const initialFeedPosts = [
   {
     id: "post_1",
-    author: "Stylist Daily",
-    text: "Идея: добавьте один акцентный аксессуар к строгому образу — и он заиграет.",
+    author: "Style Radar",
+    source: "Редакция",
+    title: "Белая рубашка снова в центре капсулы",
+    text: "Белая рубашка остается базой: добавьте прямые джинсы и мягкий тренч, чтобы собрать образ без перегруза.",
+    category: "База",
+    timeAgo: "2 ч",
     tags: ["office", "classic"],
     outfitId: "outfit_1",
     likes: 128,
@@ -14,7 +18,11 @@ export const initialFeedPosts = [
   {
     id: "post_2",
     author: "Minimal Mood",
-    text: "Белая рубашка + джинсы — база, которую можно усложнять фактурами.",
+    source: "Подборка",
+    title: "Три спокойных сочетания на каждый день",
+    text: "Футболка, темный деним и белые кеды остаются самым надежным сценарием для мобильного гардероба.",
+    category: "Повседневно",
+    timeAgo: "4 ч",
     tags: ["casual"],
     outfitId: "outfit_2",
     likes: 256,
@@ -23,7 +31,11 @@ export const initialFeedPosts = [
   {
     id: "post_3",
     author: "Warm Seasons",
-    text: "Слойность: тонкий свитер + пальто + шарф. Супер для зимы.",
+    source: "Гид",
+    title: "Как сделать зимний образ легче визуально",
+    text: "Тонкий свитер, прямое пальто и аккуратный шарф дают нужный объем, но не превращают образ в тяжелый слой.",
+    category: "Сезон",
+    timeAgo: "6 ч",
     tags: ["warm", "winter"],
     outfitId: "outfit_3",
     likes: 93,
@@ -31,8 +43,12 @@ export const initialFeedPosts = [
   },
   {
     id: "post_4",
-    author: "Color Note",
-    text: "Синий низ в летнем офисе смотрится свежо и при этом спокойно.",
+    author: "Office Edit",
+    source: "Lookbook",
+    title: "Легкий офисный образ на теплый день",
+    text: "Сдержанная юбка миди и белый верх работают чище, если оставить аксессуары минимальными и тонкими.",
+    category: "Офис",
+    timeAgo: "9 ч",
     tags: ["office", "summer"],
     outfitId: "outfit_4",
     likes: 74,
@@ -41,11 +57,14 @@ export const initialFeedPosts = [
   {
     id: "post_5",
     author: "Evening Edit",
-    text: "Черное платье — ваш лучший друг. Оставьте силуэт чистым, добавьте сумку-акцент.",
+    source: "Гид",
+    title: "Вечерний образ без лишнего декора",
+    text: "Черное платье держит весь силуэт, а сумка и обувь могут остаться спокойными, чтобы акцент не распался.",
+    category: "Вечер",
+    timeAgo: "12 ч",
     tags: ["evening"],
     outfitId: "outfit_5",
     likes: 311,
     saved: true,
   },
 ];
-

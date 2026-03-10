@@ -17,7 +17,7 @@ function buildNextDays(count = 7) {
 }
 
 export default function CalendarStrip({ selectedKey, onSelect }) {
-  const { colors, radius, spacing, typography } = useAppTheme();
+  const { colors, spacing, typography, radius } = useAppTheme();
   const data = buildNextDays(7);
 
   return (
@@ -26,45 +26,28 @@ export default function CalendarStrip({ selectedKey, onSelect }) {
       showsHorizontalScrollIndicator={false}
       data={data}
       keyExtractor={(it) => it.key}
-      contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.sm }}
+      contentContainerStyle={{ paddingHorizontal: spacing.md, gap: spacing.md }}
       renderItem={({ item }) => {
         const selected = item.key === selectedKey;
         return (
-          <Pressable
-            onPress={() => onSelect(item.key)}
-            style={({ pressed }) => [
-              styles.tile,
-              {
-                borderRadius: radius.md,
-                backgroundColor: selected ? colors.accentSoft : colors.surface,
-                borderColor: selected ? colors.accent : colors.border,
-                opacity: pressed ? 0.92 : 1,
-              },
-            ]}
-          >
-            <Text
+          <Pressable onPress={() => onSelect(item.key)} style={({ pressed }) => [{ opacity: pressed ? 0.55 : 1 }]}>
+            <View
               style={[
-                typography.small,
+                styles.item,
                 {
-                  color: selected ? colors.text : colors.mutedText,
-                  textTransform: "capitalize",
-                  letterSpacing: 0.6,
+                  backgroundColor: selected ? colors.text : colors.bg2 ?? colors.card2,
+                  borderColor: selected ? colors.text : colors.border,
+                  borderRadius: radius.md,
                 },
               ]}
             >
-              {item.dayLabel}
-            </Text>
-            <Text
-              style={[
-                typography.h3,
-                {
-                  marginTop: 2,
-                  color: colors.text,
-                },
-              ]}
-            >
-              {item.dayNumber}
-            </Text>
+              <Text style={[typography.caption, { color: selected ? colors.bg : colors.mutedText }]}>
+                {item.dayLabel}
+              </Text>
+              <Text style={[typography.h3, { marginTop: 4, color: selected ? colors.bg : colors.text }]}>
+                {item.dayNumber}
+              </Text>
+            </View>
           </Pressable>
         );
       }}
@@ -74,11 +57,10 @@ export default function CalendarStrip({ selectedKey, onSelect }) {
 }
 
 const styles = StyleSheet.create({
-  tile: {
-    width: 66,
+  item: {
+    minWidth: 64,
     paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 12,
     borderWidth: StyleSheet.hairlineWidth,
   },
 });

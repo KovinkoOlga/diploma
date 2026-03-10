@@ -1,16 +1,15 @@
-/** @typedef {{ id: string; title: string; icon: string; tone: "blue"|"violet"|"green"|"orange"|"pink"|"graphite" }} Category */
+/** @typedef {{ id: string; title: string; icon: string }} Category */
 
 /** @type {Category[]} */
 export const categories = [
-  { id: "outerwear", title: "Верхняя одежда", icon: "snow", tone: "blue" },
-  { id: "tops", title: "Верх", icon: "shirt-outline", tone: "violet" },
-  { id: "bottoms", title: "Низ", icon: "walk-outline", tone: "graphite" },
-  { id: "shoes", title: "Обувь", icon: "footsteps-outline", tone: "orange" },
-  { id: "accessories", title: "Аксессуары", icon: "watch-outline", tone: "pink" },
-  { id: "bags", title: "Сумки", icon: "bag-outline", tone: "green" },
+  { id: "outerwear", title: "Верхняя одежда", icon: "snow-outline" },
+  { id: "tops", title: "Верх", icon: "shirt-outline" },
+  { id: "bottoms", title: "Низ", icon: "walk-outline" },
+  { id: "shoes", title: "Обувь", icon: "footsteps-outline" },
+  { id: "accessories", title: "Аксессуары", icon: "watch-outline" },
+  { id: "bags", title: "Сумки", icon: "bag-outline" },
 ];
 
 export function getCategoryById(categoryId) {
-  return categories.find((c) => c.id === categoryId);
+  return categories.find((category) => category.id === categoryId);
 }
-

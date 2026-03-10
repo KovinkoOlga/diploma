@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import { lightColors, darkColors } from "./colors";
 import { typography } from "./typography";
 
@@ -7,41 +6,23 @@ export const spacing = {
   xs: 8,
   sm: 12,
   md: 16,
-  lg: 22,
-  xl: 28,
-  xxl: 36,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
 };
 
-// Softer, "handmade" rounding.
 export const radius = {
-  sm: 14,
-  md: 18,
-  lg: 22,
+  none: 0,
+  sm: 8,
+  md: 12,
+  lg: 18,
+  xl: 24,
   pill: 999,
 };
 
-// Very gentle shadows: paper lifted slightly by morning light (avoid aggressive depth).
 export const shadows = {
-  card: Platform.select({
-    ios: {
-      shadowColor: "#2E2A27",
-      shadowOpacity: 0.05,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-    },
-    android: { elevation: 1 },
-    default: {},
-  }),
-  tabBar: Platform.select({
-    ios: {
-      shadowColor: "#2E2A27",
-      shadowOpacity: 0.06,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 8 },
-    },
-    android: { elevation: 3 },
-    default: {},
-  }),
+  card: {},
+  tabBar: {},
 };
 
 export function createTheme(colorScheme = "light") {
@@ -55,5 +36,11 @@ export function createTheme(colorScheme = "light") {
     typography,
     radius,
     shadows,
+    layout: {
+      screenPadding: 16,
+      cardGap: 14,
+      sectionGap: 20,
+      tabBarBaseHeight: 56,
+    },
   };
 }

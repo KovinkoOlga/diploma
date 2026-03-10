@@ -8,12 +8,13 @@ export default function RootNavigator() {
 
   const navTheme = useMemo(() => {
     const base = theme.isDark ? DarkTheme : DefaultTheme;
+
     return {
       ...base,
       colors: {
         ...base.colors,
-        background: theme.colors.bg,
-        card: theme.colors.card,
+        background: theme.colors.background,
+        card: theme.colors.surface,
         border: theme.colors.border,
         text: theme.colors.text,
         primary: theme.colors.accent,
@@ -27,4 +28,3 @@ export default function RootNavigator() {
     </NavigationContainer>
   );
 }
-

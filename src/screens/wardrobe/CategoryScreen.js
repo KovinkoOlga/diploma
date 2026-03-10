@@ -1,49 +1,46 @@
 import React, { useLayoutEffect, useMemo } from "react";
 import { FlatList, View } from "react-native";
-import Screen from "../../components/Screen";
+import Screen, { useScreenContentInsets } from "../../components/Screen";
+import WardrobeItemCard from "../../components/WardrobeItemCard";
 import EmptyState from "../../components/EmptyState";
-import ItemCard from "../../components/ItemCard";
-import FAB from "../../components/FAB";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { getCategoryById } from "../../data/categories";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
 
 export default function CategoryScreen({ navigation, route }) {
-  const { spacing } = useAppTheme();
+  const { spacing, layout } = useAppTheme();
+  const { bottom } = useScreenContentInsets(12);
   const { items } = useWardrobe();
-  const categoryId = route.params?.categoryId;
-  const category = getCategoryById(categoryId);
+  const category = getCategoryById(route.params?.categoryId);
+  const filteredItems = useMemo(
+    () => items.filter((item) => item.categoryId === route.params?.categoryId),
+    [items, route.params?.categoryId]
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: category?.title ?? "Категория" });
-  }, [navigation, category?.title]);
-
-  const filtered = useMemo(() => items.filter((it) => it.categoryId === categoryId), [items, categoryId]);
+  }, [category?.title, navigation]);
 
   return (
     <Screen>
-      <View style={{ flex: 1, paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-        {filtered.length === 0 ? (
-          <EmptyState
-            icon="pricetag-outline"
-            title="Пока пусто"
-            subtitle="Добавьте вещь в эту категорию — она появится здесь."
-          />
-        ) : (
-          <FlatList
-            data={filtered}
-            keyExtractor={(it) => it.id}
-            contentContainerStyle={{ gap: spacing.sm, paddingBottom: 160 }}
-            renderItem={({ item }) => (
-              <ItemCard item={item} onPress={() => navigation.navigate(Routes.ItemDetails, { itemId: item.id })} />
-            )}
-          />
+      <FlatList
+        data={filteredItems}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        showsVerticalScrollIndicator={false}
+        columnWrapperStyle={{ gap: spacing.sm }}
+        contentContainerStyle={{ paddingBottom: bottom, paddingHorizontal: layout.screenPadding, paddingTop: spacing.md }}
+        renderItem={({ item }) => (
+          <View style={{ flex: 1 }}>
+            <WardrobeItemCard item={item} onPress={() => navigation.navigate(Routes.ItemDetails, { itemId: item.id })} />
+          </View>
         )}
-      </View>
-
-      <FAB onPress={() => navigation.navigate(Routes.AddItem, { presetCategoryId: categoryId })} />
+        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        ListEmptyComponent={
+          <EmptyState icon="albums-outline" title="В этой категории пусто" subtitle="Добавьте вещь или выберите другую категорию." />
+        }
+      />
     </Screen>
   );
 }
-

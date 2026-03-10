@@ -11,17 +11,8 @@ export default function Card({ children, style, variant = "paper" }) {
       style={[
         styles.base,
         variant === "flat"
-          ? {
-              backgroundColor: colors.surface,
-              borderRadius: radius.md,
-              borderColor: colors.border,
-            }
-          : {
-              backgroundColor: colors.card,
-              borderRadius: radius.md,
-              borderColor: colors.border,
-              ...shadows.card,
-            },
+          ? { backgroundColor: "transparent", borderColor: colors.divider, borderRadius: radius.md }
+          : { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.md, ...shadows.card },
         style,
       ]}
     >

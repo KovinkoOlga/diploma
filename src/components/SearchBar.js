@@ -1,33 +1,58 @@
 import React from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
 
-export default function SearchBar({ value, onChangeText, placeholder = "Поиск" }) {
-  const { colors, radius, spacing, typography } = useAppTheme();
+export default function SearchBar({
+  value,
+  onChangeText,
+  placeholder = "Поиск",
+  onSubmitEditing,
+  onClear,
+}) {
+  const { colors, spacing, radius } = useAppTheme();
+
   return (
     <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        paddingHorizontal: spacing.md,
-        height: 46,
-        borderRadius: radius.pill,
-        backgroundColor: colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: colors.border,
-      }}
+      style={[
+        styles.root,
+        {
+          backgroundColor: colors.inputBackground,
+          borderColor: colors.inputBorder,
+          borderRadius: radius.md,
+          paddingHorizontal: spacing.sm,
+        },
+      ]}
     >
-      <Ionicons name="search-outline" size={18} color={colors.mutedText} />
+      <Ionicons name="search" size={16} color={colors.secondaryText} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.mutedText}
-        style={[typography.body, { flex: 1, color: colors.text }]}
-        returnKeyType="search"
+        placeholderTextColor={colors.secondaryText}
+        style={[styles.input, { color: colors.text }]}
+        onSubmitEditing={onSubmitEditing}
       />
+      {value ? (
+        <Pressable onPress={onClear} hitSlop={8} style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}>
+          <Ionicons name="close-circle" size={16} color={colors.secondaryText} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    height: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  input: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 15,
+    paddingVertical: 0,
+  },
+});

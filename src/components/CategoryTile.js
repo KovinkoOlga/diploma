@@ -1,46 +1,54 @@
 import React from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Card from "./Card";
 import { useAppTheme } from "../theme/ThemeProvider";
-import { categoryTones } from "../theme/colors";
 
 export default function CategoryTile({ title, icon, count, tone = "blue", onPress }) {
-  const { colors, spacing, typography } = useAppTheme();
-  const accent = categoryTones[tone] ?? colors.accent;
+  const { colors, spacing, typography, radius } = useAppTheme();
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.92 : 1 }]}>
-      <Card style={{ padding: spacing.md }} variant="flat">
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, flex: 1 }]}>
+      <View
+        style={[
+          styles.tile,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.divider,
+            borderRadius: radius.md,
+            padding: spacing.md,
+          },
+        ]}
+      >
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <View
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 14,
-              backgroundColor: colors.chipBg,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name={icon} size={18} color={accent} />
+          <View style={{ flex: 1, paddingRight: spacing.sm }}>
+            <Text style={[typography.sectionTitle, { color: colors.text }]} numberOfLines={1}>
+              {title}
+            </Text>
+            <Text style={[typography.caption, { marginTop: 2, color: colors.mutedText }]}>{count} вещей</Text>
           </View>
-          <Text style={[typography.caption, { color: colors.mutedText }]}>{count}</Text>
+          <View
+            style={[
+              styles.iconWrap,
+              { backgroundColor: colors.bg2 ?? colors.card2, borderColor: colors.border, borderRadius: radius.pill },
+            ]}
+          >
+            <Ionicons name={icon} size={16} color={colors.mutedText} />
+          </View>
         </View>
-        <Text
-          style={{
-            marginTop: spacing.sm,
-            color: colors.text,
-            ...typography.body,
-            fontWeight: typography.weights.medium,
-          }}
-          numberOfLines={2}
-        >
-          {title}
-        </Text>
-      </Card>
+      </View>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  tile: {
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  iconWrap: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+});

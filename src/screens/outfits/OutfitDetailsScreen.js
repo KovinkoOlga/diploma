@@ -1,25 +1,22 @@
 import React, { useLayoutEffect, useMemo } from "react";
-import { Image, ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Screen from "../../components/Screen";
-import Card from "../../components/Card";
 import Chip from "../../components/Chip";
 import SectionHeader from "../../components/SectionHeader";
-import PrimaryButton from "../../components/PrimaryButton";
+import WardrobeItemCard from "../../components/WardrobeItemCard";
+import ActionButton from "../../components/ActionButton";
+import EmptyState from "../../components/EmptyState";
+import MediaPreview from "../../components/MediaPreview";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
 
 export default function OutfitDetailsScreen({ navigation, route }) {
-  const { colors, spacing, typography, radius } = useAppTheme();
+  const { colors, typography, spacing, radius } = useAppTheme();
   const { outfits, items } = useWardrobe();
-  const outfitId = route.params?.outfitId;
-
-  const outfit = useMemo(() => outfits.find((o) => o.id === outfitId), [outfits, outfitId]);
-  const itemById = useMemo(() => Object.fromEntries(items.map((i) => [i.id, i])), [items]);
-  const outfitItems = useMemo(
-    () => (outfit ? outfit.itemIds.map((id) => itemById[id]).filter(Boolean) : []),
-    [outfit, itemById]
-  );
+  const outfit = useMemo(() => outfits.find((entry) => entry.id === route.params?.outfitId), [outfits, route.params?.outfitId]);
+  const itemById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
+  const outfitItems = useMemo(() => (outfit?.itemIds ?? []).map((id) => itemById[id]).filter(Boolean), [itemById, outfit?.itemIds]);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: outfit?.title ?? "Образ" });
@@ -27,72 +24,60 @@ export default function OutfitDetailsScreen({ navigation, route }) {
 
   if (!outfit) {
     return (
-      <Screen>
-        <View style={{ padding: spacing.md }}>
-          <Text style={{ color: colors.text }}>Образ не найден.</Text>
-        </View>
+      <Screen padded>
+        <EmptyState icon="alert-circle-outline" title="Образ не найден" subtitle="Вернитесь к сетке образов и выберите другой." />
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 160 }}
-        style={{ flex: 1 }}
-      >
-        <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md }}>
-          <Card style={{ padding: spacing.md }} variant="flat">
-            <Text style={[typography.h2, { color: colors.text }]}>{outfit.title}</Text>
-            <Text style={[typography.body, { marginTop: 8, color: colors.mutedText }]}>
-              {outfit.season.join(", ")} · {outfitItems.length} вещей
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: spacing.md }}>
-              {outfit.tags.map((t) => (
-                <Chip key={t} label={t} />
-              ))}
-            </View>
+    <Screen scroll padded>
+      <MediaPreview
+        source={outfitItems[0]?.image}
+        placeholderScale={0.46}
+        containerStyle={{
+          width: "100%",
+          aspectRatio: 1.05,
+          borderRadius: radius.xl,
+          backgroundColor: colors.secondaryBackground,
+        }}
+      />
 
-            <PrimaryButton
-              title="Редактировать"
-              icon="create-outline"
-              style={{ marginTop: spacing.md }}
-              onPress={() => navigation.navigate(Routes.OutfitEditor, { outfitId: outfit.id })}
+      <View style={{ marginTop: spacing.md }}>
+        <Text style={[typography.h1, { color: colors.text }]}>{outfit.title}</Text>
+        <Text style={[typography.body, { color: colors.secondaryText, marginTop: 6 }]}>
+          {outfit.season.join(", ")} · {outfitItems.length} вещей
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: spacing.md }}>
+        {(outfit.tags ?? []).map((tag) => (
+          <Chip key={tag} label={tag} />
+        ))}
+      </View>
+
+      <ActionButton
+        label="Редактировать образ"
+        icon="create-outline"
+        variant="secondary"
+        onPress={() => navigation.navigate(Routes.OutfitEditor, { outfitId: outfit.id })}
+        style={{ marginTop: spacing.md }}
+        fullWidth
+      />
+
+      <View style={{ marginTop: spacing.lg }}>
+        <SectionHeader title="Состав" />
+        <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+          {outfitItems.map((item) => (
+            <WardrobeItemCard
+              key={item.id}
+              item={item}
+              variant="list"
+              onPress={() => navigation.navigate("WardrobeTab", { screen: Routes.ItemDetails, params: { itemId: item.id } })}
             />
-          </Card>
-
-          <SectionHeader title="Вещи в образе" />
-          <View style={{ gap: spacing.sm }}>
-            {outfitItems.map((it) => (
-              <Card key={it.id} style={{ padding: spacing.md }} variant="flat">
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Image
-                    source={it.image}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.card2,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                    }}
-                  />
-                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                    <Text style={[typography.body, { color: colors.text, fontWeight: typography.weights.medium }]}>
-                      {it.title}
-                    </Text>
-                    <Text style={[typography.caption, { marginTop: 4, color: colors.mutedText }]}>
-                      {it.brand ? `${it.brand} · ` : ""}
-                      {it.colors?.[0] ?? "—"}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-            ))}
-          </View>
+          ))}
         </View>
-      </ScrollView>
+      </View>
     </Screen>
   );
 }

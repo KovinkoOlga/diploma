@@ -1,48 +1,31 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
+import ActionButton from "./ActionButton";
 
-export default function EmptyState({ icon = "sparkles-outline", title, subtitle, action }) {
-  const { colors, spacing, typography } = useAppTheme();
+export default function EmptyState({ icon, title, subtitle, actionLabel, onAction }) {
+  const { colors, typography, spacing } = useAppTheme();
+
   return (
-    <View style={{ alignItems: "center", paddingVertical: spacing.xl }}>
+    <View style={{ alignItems: "center", justifyContent: "center", paddingVertical: spacing.xxl }}>
       <View
         style={{
           width: 56,
           height: 56,
-          borderRadius: 18,
-          backgroundColor: colors.chipBg,
-          borderWidth: 1,
-          borderColor: colors.border,
+          borderRadius: 28,
           alignItems: "center",
           justifyContent: "center",
-          marginBottom: spacing.sm,
+          backgroundColor: colors.secondaryBackground,
         }}
       >
-        <Ionicons name={icon} size={22} color={colors.icon} />
+        <Ionicons name={icon} size={22} color={colors.secondaryText} />
       </View>
-      <Text
-        style={[typography.h3, { color: colors.text, textAlign: "center" }]}
-      >
-        {title}
+      <Text style={[typography.sectionTitle, { color: colors.text, marginTop: spacing.md }]}>{title}</Text>
+      <Text style={[typography.body, { color: colors.secondaryText, marginTop: 6, textAlign: "center" }]}>
+        {subtitle}
       </Text>
-      {subtitle ? (
-        <Text
-          style={[
-            typography.body,
-            {
-              marginTop: spacing.xs,
-              color: colors.mutedText,
-              textAlign: "center",
-              maxWidth: 320,
-            },
-          ]}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
-      {action ? <View style={{ marginTop: spacing.md }}>{action}</View> : null}
+      {actionLabel ? <ActionButton label={actionLabel} variant="secondary" onPress={onAction} style={{ marginTop: spacing.md }} /> : null}
     </View>
   );
 }
