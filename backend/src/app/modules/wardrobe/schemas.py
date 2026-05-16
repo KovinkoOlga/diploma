@@ -128,11 +128,25 @@ class DraftCreatePayload(BaseModel):
     templateId: str | None = None
 
 
+class DraftImageAsset(BaseModel):
+    fileId: str
+    imageUrl: str | None = None
+
+
+class DraftImagesResponse(BaseModel):
+    cutout: DraftImageAsset | None = None
+    catalog: DraftImageAsset | None = None
+
+
 class DraftResponse(BaseModel):
     id: str
     sourceType: str
     processingStatus: str
+    catalogProcessingStatus: str = "not_requested"
     ready: bool
     draft: dict[str, Any] | None = None
     errorMessage: str | None = None
-
+    catalogErrorMessage: str | None = None
+    images: DraftImagesResponse | None = None
+    maskImageUrl: str | None = None
+    mlResult: dict[str, Any] | None = None

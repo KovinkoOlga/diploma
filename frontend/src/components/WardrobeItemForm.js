@@ -9,12 +9,24 @@ import {
   WARDROBE_STATUSES,
   WARDROBE_STYLES,
 } from "../utils/wardrobe";
+import ActionButton from "./ActionButton";
 import Chip from "./Chip";
 import Input from "./Input";
 import MediaPreview from "./MediaPreview";
 import SectionHeader from "./SectionHeader";
 
-export default function WardrobeItemForm({ draft, onChange, catalogs, categories }) {
+export default function WardrobeItemForm({
+  draft,
+  onChange,
+  catalogs,
+  categories,
+  draftImages,
+  catalogProcessingStatus,
+  catalogErrorMessage,
+  onSelectImageOption,
+  onEnhancePhoto,
+  enhanceBusy = false,
+}) {
   const { colors, typography, spacing, radius } = useAppTheme();
   const selectedCategory = useMemo(
     () => categories.find((category) => category.id === draft.categoryId) ?? categories[0],
@@ -23,16 +35,15 @@ export default function WardrobeItemForm({ draft, onChange, catalogs, categories
 
   const toggleArrayValue = (field, value) => {
     const current = draft[field] ?? [];
-    const next = current.includes(value)
-      ? current.filter((entry) => entry !== value)
-      : [...current, value];
-
+    const next = current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
     onChange({ ...draft, [field]: next });
   };
 
   const setField = (field, value) => {
     onChange({ ...draft, [field]: value });
   };
+
+  const catalogBusy = catalogProcessingStatus === "processing" || catalogProcessingStatus === "queued";
 
   return (
     <View>
@@ -58,6 +69,42 @@ export default function WardrobeItemForm({ draft, onChange, catalogs, categories
             backgroundColor: colors.background,
           }}
         />
+        {draftImages?.cutout || draftImages?.catalog ? (
+          <View style={{ marginTop: spacing.md }}>
+            <Text style={[typography.meta, { color: colors.secondaryText }]}>Вариант изображения</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              {draftImages?.cutout ? (
+                <Chip
+                  label="Cutout"
+                  selected={draft.primaryImageFileId === draftImages.cutout.fileId}
+                  onPress={() => onSelectImageOption?.(draftImages.cutout)}
+                />
+              ) : null}
+              {draftImages?.catalog ? (
+                <Chip
+                  label="Catalog"
+                  selected={draft.primaryImageFileId === draftImages.catalog.fileId}
+                  onPress={() => onSelectImageOption?.(draftImages.catalog)}
+                />
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+        {onEnhancePhoto ? (
+          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+            <ActionButton
+              label={catalogBusy || enhanceBusy ? "Улучшаем..." : "Улучшить фото"}
+              icon="sparkles-outline"
+              onPress={onEnhancePhoto}
+              disabled={catalogBusy || enhanceBusy}
+              fullWidth
+            />
+            {catalogBusy ? (
+              <Text style={[typography.caption, { color: colors.secondaryText }]}>Генерируем каталожный вариант.</Text>
+            ) : null}
+            {catalogErrorMessage ? <Text style={[typography.caption, { color: colors.danger }]}>{catalogErrorMessage}</Text> : null}
+          </View>
+        ) : null}
       </View>
 
       <View style={{ marginTop: spacing.lg }}>

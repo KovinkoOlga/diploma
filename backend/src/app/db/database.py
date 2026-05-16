@@ -10,6 +10,10 @@ engine: AsyncEngine = create_async_engine(settings.database_url, pool_pre_ping=T
 
 
 async def get_connection() -> AsyncIterator[AsyncConnection]:
-    async with engine.begin() as connection:
-        yield connection
-
+    async with engine.connect() as connection:
+        try:
+            yield connection
+            await connection.commit()
+        except Exception:
+            await connection.rollback()
+            raise

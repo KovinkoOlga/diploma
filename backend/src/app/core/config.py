@@ -7,6 +7,8 @@ class Settings(BaseSettings):
 
     environment: str = "local"
     database_url: str = "postgresql+asyncpg://app:app@localhost:5432/app"
+    redis_url: str = "redis://localhost:6379/0"
+    celery_task_always_eager: bool = False
 
     jwt_secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"
@@ -20,6 +22,9 @@ class Settings(BaseSettings):
     s3_region: str = "ru-1"
     s3_presigned_expire_seconds: int = 3600
     s3_force_path_style: bool = True
+    ml_bg_service_url: str = "http://ml-bg-service:8001"
+    ml_catalog_service_url: str = "http://ml-catalog-service:8002"
+    ml_request_timeout_seconds: int = 300
 
     cors_origins: str = "http://localhost:8081,http://localhost:19006"
 

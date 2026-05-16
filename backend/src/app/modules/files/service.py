@@ -1,7 +1,8 @@
+import inspect
 from uuid import uuid4
 
 from aiobotocore.session import get_session
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.config import get_settings
@@ -39,6 +40,20 @@ class S3Storage:
                 ContentType=mime_type,
             )
 
+    async def get_object(self, bucket: str, object_key: str) -> bytes | None:
+        if not self.configured():
+            return None
+        session = get_session()
+        async with session.create_client("s3", **self._client_kwargs(), verify=False) as client:
+            response = await client.get_object(Bucket=bucket, Key=object_key)
+            stream = response["Body"]
+            try:
+                return await stream.read()
+            finally:
+                close_result = stream.close()
+                if inspect.isawaitable(close_result):
+                    await close_result
+
     async def presigned_get_url(self, bucket: str, object_key: str) -> str | None:
         if not self.configured():
             return None
@@ -54,14 +69,14 @@ class S3Storage:
 storage = S3Storage()
 
 
-async def create_image_file(
+async def create_file_record(
     connection: AsyncConnection,
-    user_id: str,
-    content: bytes,
     filename: str,
     mime_type: str,
+    *,
+    file_id: str | None = None,
 ) -> str:
-    file_id = new_id("file")
+    file_id = file_id or new_id("file")
     await connection.execute(
         insert(files).values(
             id=file_id,
@@ -69,35 +84,92 @@ async def create_image_file(
             original_filename=filename,
         )
     )
-
-    for variant_type in ("original", "card", "thumbnail"):
-        object_key = f"users/{user_id}/wardrobe/{file_id}/{variant_type}"
-        await storage.put_object(object_key, content, mime_type)
-        await connection.execute(
-            insert(file_variants).values(
-                id=new_id("variant"),
-                file_id=file_id,
-                variant_type=variant_type,
-                bucket=get_settings().s3_bucket_private,
-                object_key=object_key,
-                mime_type=mime_type,
-                size_bytes=len(content),
-            )
-        )
     return file_id
 
 
-async def get_file_url(connection: AsyncConnection, file_id: str | None, variant_type: str = "card") -> str | None:
+async def save_file_variant(
+    connection: AsyncConnection,
+    user_id: str,
+    file_id: str,
+    variant_type: str,
+    content: bytes,
+    mime_type: str,
+) -> None:
+    object_key = f"users/{user_id}/wardrobe/{file_id}/{variant_type}"
+    await storage.put_object(object_key, content, mime_type)
+    existing = (
+        await connection.execute(
+            select(file_variants.c.id).where(
+                file_variants.c.file_id == file_id,
+                file_variants.c.variant_type == variant_type,
+            )
+        )
+    ).scalar_one_or_none()
+    values = {
+        "file_id": file_id,
+        "variant_type": variant_type,
+        "bucket": get_settings().s3_bucket_private,
+        "object_key": object_key,
+        "mime_type": mime_type,
+        "size_bytes": len(content),
+    }
+    if existing:
+        await connection.execute(update(file_variants).where(file_variants.c.id == existing).values(**values))
+        return
+    await connection.execute(insert(file_variants).values(id=new_id("variant"), **values))
+
+
+async def create_image_file_with_variants(
+    connection: AsyncConnection,
+    user_id: str,
+    content_by_variant: dict[str, bytes],
+    filename: str,
+    mime_type: str,
+) -> str:
+    file_id = await create_file_record(connection, filename, mime_type)
+    for variant_type, variant_content in content_by_variant.items():
+        await save_file_variant(connection, user_id, file_id, variant_type, variant_content, mime_type)
+    return file_id
+
+
+async def create_image_file(
+    connection: AsyncConnection,
+    user_id: str,
+    content: bytes,
+    filename: str,
+    mime_type: str,
+) -> str:
+    return await create_image_file_with_variants(
+        connection,
+        user_id,
+        {"original": content, "card": content, "thumbnail": content},
+        filename,
+        mime_type,
+    )
+
+
+async def get_file_variant_record(connection: AsyncConnection, file_id: str | None, variant_type: str) -> dict | None:
     if not file_id:
         return None
-    row = (
+    return (
         await connection.execute(
-            select(file_variants.c.bucket, file_variants.c.object_key).where(
+            select(file_variants).where(
                 file_variants.c.file_id == file_id,
                 file_variants.c.variant_type == variant_type,
             )
         )
     ).mappings().first()
+
+
+async def get_file_bytes(connection: AsyncConnection, file_id: str | None, variant_type: str = "original") -> bytes | None:
+    row = await get_file_variant_record(connection, file_id, variant_type)
+    if row is None:
+        return None
+    return await storage.get_object(row["bucket"], row["object_key"])
+
+
+async def get_file_url(connection: AsyncConnection, file_id: str | None, variant_type: str = "card") -> str | None:
+    row = await get_file_variant_record(connection, file_id, variant_type)
     if row is None:
         return None
     return await storage.presigned_get_url(row["bucket"], row["object_key"])

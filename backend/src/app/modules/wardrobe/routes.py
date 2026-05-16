@@ -208,7 +208,10 @@ async def create_draft(
     current_user: dict = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> DraftResponse:
-    return await service.create_draft(connection, _user_id(current_user), payload.sourceType, payload.catalogId, payload.templateId)
+    try:
+        return await service.create_draft(connection, _user_id(current_user), payload.sourceType, payload.catalogId, payload.templateId)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.post("/drafts/upload", response_model=DraftResponse)
@@ -229,7 +232,10 @@ async def upload_draft(
             file.filename or "wardrobe-image",
             file.content_type or "application/octet-stream",
         )
-    return await service.create_draft(connection, _user_id(current_user), sourceType, catalogId, file_id=file_id)
+    try:
+        return await service.create_draft(connection, _user_id(current_user), sourceType, catalogId, file_id=file_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.post("/drafts/from-template", response_model=DraftResponse)
@@ -238,7 +244,10 @@ async def draft_from_template(
     current_user: dict = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> DraftResponse:
-    return await service.create_draft(connection, _user_id(current_user), "catalog", payload.catalogId, payload.templateId)
+    try:
+        return await service.create_draft(connection, _user_id(current_user), "catalog", payload.catalogId, payload.templateId)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.get("/drafts/{draft_id}", response_model=DraftResponse)
@@ -251,6 +260,20 @@ async def get_draft(
         return await service.get_draft(connection, _user_id(current_user), draft_id)
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+
+
+@router.post("/drafts/{draft_id}/enhance", response_model=DraftResponse)
+async def enhance_draft(
+    draft_id: str,
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> DraftResponse:
+    try:
+        return await service.enhance_draft(connection, _user_id(current_user), draft_id)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.post("/drafts/{draft_id}/confirm", response_model=ItemResponse)
@@ -266,4 +289,3 @@ async def confirm_draft(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-

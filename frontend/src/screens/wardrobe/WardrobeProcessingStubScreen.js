@@ -36,6 +36,10 @@ export default function WardrobeProcessingStubScreen({ navigation, route }) {
         const next = await actions.fetchDraft(draftId);
         if (!alive) return;
         setDraftState(next);
+        if (next.processingStatus === "failed") {
+          setError(next.errorMessage || "Не удалось обработать изображение");
+          return;
+        }
         if (next.ready) {
           navigation.replace(Routes.WardrobeConfirmItem, { draftId, draft: next.draft });
           return;
@@ -122,4 +126,3 @@ export default function WardrobeProcessingStubScreen({ navigation, route }) {
     </Screen>
   );
 }
-

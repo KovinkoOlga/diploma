@@ -13,15 +13,46 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
   migrations:
     build:
       context: ./backend
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
     command: ["alembic", "upgrade", "head"]
     depends_on:
       postgres:
         condition: service_healthy
+
+  ml-bg-service:
+    build:
+      context: ./ml-bg-service
+    env_file:
+      - .env
+    environment:
+      BG_MODEL_PATH: /app/models/model.keras
+    ports:
+      - "8001:8001"
+
+  ml-catalog-service:
+    build:
+      context: ./ml-catalog-service
+    env_file:
+      - .env
+    environment:
+      CATALOG_DEVICE: auto
+      CATALOG_ENABLE_STUB: "false"
+      HF_HOME: /app/.cache/huggingface
+    ports:
+      - "8002:8002"
+    volumes:
+      - hf_cache:/app/.cache/huggingface
 
   backend:
     build:
@@ -29,11 +60,49 @@ services:
     command: bash -c "uvicorn src.app.main:app --host 0.0.0.0 --port 8000 --reload"
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ML_BG_SERVICE_URL: http://ml-bg-service:8001
+      ML_CATALOG_SERVICE_URL: http://ml-catalog-service:8002
     ports:
       - "8000:8000"
     depends_on:
       migrations:
         condition: service_completed_successfully
+      redis:
+        condition: service_started
+      ml-bg-service:
+        condition: service_started
+      ml-catalog-service:
+        condition: service_started
+
+  celery-worker:
+    build:
+      context: ./backend
+    command:
+      - /app/.venv/bin/python
+      - -m
+      - celery
+      - -A
+      - app.tasks.celery_app:celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=1
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ML_BG_SERVICE_URL: http://ml-bg-service:8001
+      ML_CATALOG_SERVICE_URL: http://ml-catalog-service:8002
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      ml-bg-service:
+        condition: service_started
+      ml-catalog-service:
+        condition: service_started
 
   pgadmin:
     container_name: pgadmin
@@ -48,4 +117,4 @@ services:
 
 volumes:
   postgres_data:
-
+  hf_cache:

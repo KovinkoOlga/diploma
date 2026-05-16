@@ -35,7 +35,7 @@ export default function WardrobeAddFromPhotoScreen({ navigation }) {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: false,
       quality: 0.9,
     });

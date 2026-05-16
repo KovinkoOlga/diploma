@@ -97,6 +97,14 @@ export async function fetchDraft(draftId) {
   return draft;
 }
 
+export async function enhanceDraft(draftId) {
+  const draft = await apiPost(`/wardrobe/drafts/${draftId}/enhance`);
+  if (draft?.draft) {
+    draft.draft = normalizeRemoteImage(draft.draft);
+  }
+  return draft;
+}
+
 export async function confirmDraft(draftId, payload) {
   return normalizeRemoteImage(await apiPost(`/wardrobe/drafts/${draftId}/confirm`, payload));
 }

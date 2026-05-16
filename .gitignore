@@ -1,5 +1,9 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
+.vscode
+
+tryoffdiff/
+
 # dependencies
 node_modules/
 
@@ -48,3 +52,6 @@ __pycache__/
 # generated native folders
 /ios
 /android
+
+# ML
+*.keras

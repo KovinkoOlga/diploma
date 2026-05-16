@@ -124,7 +124,18 @@ class FileVariantAdmin(ModelView, model=FileVariant):
 
 
 class ItemDraftAdmin(ModelView, model=ItemDraft):
-    column_list = [ItemDraft.id, ItemDraft.user_id, ItemDraft.source_type, ItemDraft.processing_status, ItemDraft.catalog_id]
+    column_list = [
+        ItemDraft.id,
+        ItemDraft.user_id,
+        ItemDraft.source_type,
+        ItemDraft.processing_status,
+        ItemDraft.catalog_processing_status,
+        ItemDraft.catalog_id,
+        ItemDraft.original_file_id,
+        ItemDraft.processed_file_id,
+        ItemDraft.mask_file_id,
+        ItemDraft.catalog_file_id,
+    ]
 
 
 class ItemTemplateAdmin(ModelView, model=ItemTemplate):
