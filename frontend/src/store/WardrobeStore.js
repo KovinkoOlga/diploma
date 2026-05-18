@@ -24,6 +24,7 @@ export function WardrobeProvider({ children }) {
   const [categories, setCategories] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [outfits, setOutfits] = useState([]);
+  const [outfitDraftSessions, setOutfitDraftSessions] = useState({});
   const [feedPosts, setFeedPosts] = useState([]);
   const [homeContent, setHomeContent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -106,6 +107,13 @@ export function WardrobeProvider({ children }) {
           prev.map((outfit) => ({
             ...outfit,
             itemIds: outfit.itemIds.filter((id) => id !== itemId),
+            coverEditorStateJson:
+              outfit.coverMode === "composition" && outfit.coverEditorStateJson?.objects
+                ? {
+                    ...outfit.coverEditorStateJson,
+                    objects: outfit.coverEditorStateJson.objects.filter((entry) => entry.itemId !== itemId),
+                  }
+                : outfit.coverEditorStateJson,
           }))
         );
       },
@@ -180,6 +188,9 @@ export function WardrobeProvider({ children }) {
               tags: outfitDraft.tags,
               season: outfitDraft.season,
               description: outfitDraft.description ?? "",
+              coverMode: outfitDraft.coverMode ?? "none",
+              coverFileId: outfitDraft.coverFileId ?? null,
+              coverEditorStateJson: outfitDraft.coverEditorStateJson ?? null,
             })
           : await outfitsApi.createOutfit({
               title: outfitDraft.title,
@@ -187,6 +198,9 @@ export function WardrobeProvider({ children }) {
               tags: outfitDraft.tags,
               season: outfitDraft.season,
               description: outfitDraft.description ?? "",
+              coverMode: outfitDraft.coverMode ?? "none",
+              coverFileId: outfitDraft.coverFileId ?? null,
+              coverEditorStateJson: outfitDraft.coverEditorStateJson ?? null,
             });
         animate();
         setOutfits((prev) => {
@@ -197,6 +211,36 @@ export function WardrobeProvider({ children }) {
           return copy;
         });
         return saved;
+      },
+      async deleteOutfit(outfitId) {
+        await outfitsApi.deleteOutfit(outfitId);
+        animate();
+        setOutfits((prev) => prev.filter((outfit) => outfit.id !== outfitId));
+      },
+      async uploadOutfitCover(payload) {
+        return outfitsApi.uploadOutfitCover(payload);
+      },
+      createOutfitDraftSession(initialDraft = {}) {
+        const sessionId = `outfit_draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        setOutfitDraftSessions((prev) => ({ ...prev, [sessionId]: initialDraft }));
+        return sessionId;
+      },
+      updateOutfitDraftSession(sessionId, patch) {
+        if (!sessionId) return;
+        setOutfitDraftSessions((prev) => {
+          const current = prev[sessionId] ?? {};
+          const next = typeof patch === "function" ? patch(current) : { ...current, ...patch };
+          return { ...prev, [sessionId]: next };
+        });
+      },
+      clearOutfitDraftSession(sessionId) {
+        if (!sessionId) return;
+        setOutfitDraftSessions((prev) => {
+          if (!(sessionId in prev)) return prev;
+          const copy = { ...prev };
+          delete copy[sessionId];
+          return copy;
+        });
       },
       async togglePostSaved(postId) {
         const result = await contentApi.toggleFeedSaved(postId);
@@ -213,13 +257,14 @@ export function WardrobeProvider({ children }) {
       categories,
       templates,
       outfits,
+      outfitDraftSessions,
       feedPosts,
       homeContent,
       loading,
       error,
       actions,
     }),
-    [actions, catalogs, categories, error, feedPosts, homeContent, items, loading, outfits, templates]
+    [actions, catalogs, categories, error, feedPosts, homeContent, items, loading, outfitDraftSessions, outfits, templates]
   );
 
   return <WardrobeContext.Provider value={value}>{children}</WardrobeContext.Provider>;

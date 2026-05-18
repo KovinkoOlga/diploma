@@ -58,7 +58,10 @@ export default function FeedHomeScreen({ navigation }) {
         }
         renderItem={({ item }) => {
           const outfit = item.outfitId ? outfitById[item.outfitId] : null;
-          const image = outfit?.itemIds?.[0] ? itemById[outfit.itemIds[0]]?.image : items[0]?.image;
+          const image =
+            outfit?.coverTransparentImage ??
+            outfit?.coverImage ??
+            (outfit?.itemIds?.[0] ? itemById[outfit.itemIds[0]]?.image : items[0]?.image);
 
           return (
             <NewsCard

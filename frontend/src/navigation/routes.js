@@ -19,6 +19,7 @@ export const Routes = {
   OutfitsHome: "OutfitsHome",
   OutfitDetails: "OutfitDetails",
   OutfitEditor: "OutfitEditor",
+  OutfitCoverEditor: "OutfitCoverEditor",
   AccountHome: "AccountHome",
   Settings: "Settings",
   ProfileSettings: "ProfileSettings",

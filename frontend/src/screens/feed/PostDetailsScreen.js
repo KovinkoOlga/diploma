@@ -16,7 +16,10 @@ export default function PostDetailsScreen({ navigation, route }) {
   const post = useMemo(() => feedPosts.find((entry) => entry.id === route.params?.postId), [feedPosts, route.params?.postId]);
   const outfit = useMemo(() => outfits.find((entry) => entry.id === post?.outfitId), [outfits, post?.outfitId]);
   const itemById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
-  const cover = outfit?.itemIds?.[0] ? itemById[outfit.itemIds[0]]?.image : items[0]?.image;
+  const cover =
+    outfit?.coverTransparentImage ??
+    outfit?.coverImage ??
+    (outfit?.itemIds?.[0] ? itemById[outfit.itemIds[0]]?.image : items[0]?.image);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: post?.author ?? "Публикация" });

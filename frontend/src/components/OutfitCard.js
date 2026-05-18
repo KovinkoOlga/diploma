@@ -4,7 +4,7 @@ import GridTile from "./GridTile";
 
 export default function OutfitCard({ outfit, items, onPress }) {
   const { colors } = useAppTheme();
-  const cover = items?.[0]?.image;
+  const cover = outfit?.coverTransparentImage ?? outfit?.coverImage ?? items?.[0]?.image;
 
   return (
     <GridTile

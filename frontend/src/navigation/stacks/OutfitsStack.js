@@ -4,6 +4,7 @@ import { Routes } from "../routes";
 import OutfitsHomeScreen from "../../screens/outfits/OutfitsHomeScreen";
 import OutfitDetailsScreen from "../../screens/outfits/OutfitDetailsScreen";
 import OutfitEditorScreen from "../../screens/outfits/OutfitEditorScreen";
+import OutfitCoverEditorScreen from "../../screens/outfits/OutfitCoverEditorScreen";
 import { useAppTheme } from "../../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator();
@@ -27,6 +28,7 @@ export default function OutfitsStack() {
       <Stack.Screen name={Routes.OutfitsHome} component={OutfitsHomeScreen} options={{ headerShown: false }} />
       <Stack.Screen name={Routes.OutfitDetails} component={OutfitDetailsScreen} options={{ title: "Образ" }} />
       <Stack.Screen name={Routes.OutfitEditor} component={OutfitEditorScreen} options={{ title: "Редактор" }} />
+      <Stack.Screen name={Routes.OutfitCoverEditor} component={OutfitCoverEditorScreen} options={{ title: "Обложка" }} />
     </Stack.Navigator>
   );
 }

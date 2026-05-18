@@ -214,6 +214,8 @@ outfits = Table(
     Column("name", String(160), nullable=False),
     Column("description", Text, nullable=True),
     Column("cover_file_id", String(48), ForeignKey("files.id"), nullable=True),
+    Column("cover_mode", String(24), nullable=False, default="none"),
+    Column("cover_editor_state_json", JSON, nullable=True),
     Column("style_id", String(48), ForeignKey("styles.id"), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )

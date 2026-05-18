@@ -106,7 +106,12 @@ export default function AccountHomeScreen({ navigation }) {
               title={post.title}
               summary={post.text}
               meta={`${post.likes} лайков · ${post.source}`}
-              image={itemById[outfits.find((outfit) => outfit.id === post.outfitId)?.itemIds?.[0]]?.image ?? items[0]?.image}
+              image={
+                outfits.find((outfit) => outfit.id === post.outfitId)?.coverTransparentImage ??
+                outfits.find((outfit) => outfit.id === post.outfitId)?.coverImage ??
+                itemById[outfits.find((outfit) => outfit.id === post.outfitId)?.itemIds?.[0]]?.image ??
+                items[0]?.image
+              }
               actionLabel="Открыть"
               onPress={() => navigation.navigate("NewsTab", { screen: Routes.PostDetails, params: { postId: post.id } })}
               onActionPress={() => navigation.navigate("NewsTab", { screen: Routes.PostDetails, params: { postId: post.id } })}

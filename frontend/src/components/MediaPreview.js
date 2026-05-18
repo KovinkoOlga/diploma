@@ -44,6 +44,7 @@ export default function MediaPreview({
 
 const styles = StyleSheet.create({
   container: {
+    position: "relative",
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",

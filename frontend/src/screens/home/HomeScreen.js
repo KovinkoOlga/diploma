@@ -23,9 +23,14 @@ export default function HomeScreen({ navigation }) {
   const quickMoments = homeContent?.quickMoments ?? [];
   const tip = homeContent?.tips?.[1] ?? "";
 
-  const featuredImage = suggestedOutfit?.itemIds?.[0] ? itemById[suggestedOutfit.itemIds[0]]?.image : items[0]?.image;
+  const featuredImage =
+    suggestedOutfit?.coverTransparentImage ??
+    suggestedOutfit?.coverImage ??
+    (suggestedOutfit?.itemIds?.[0] ? itemById[suggestedOutfit.itemIds[0]]?.image : items[0]?.image);
   const secondaryImage = secondaryPost?.outfitId
-    ? itemById[outfits.find((outfit) => outfit.id === secondaryPost.outfitId)?.itemIds?.[0]]?.image
+    ? outfits.find((outfit) => outfit.id === secondaryPost.outfitId)?.coverTransparentImage ??
+      outfits.find((outfit) => outfit.id === secondaryPost.outfitId)?.coverImage ??
+      itemById[outfits.find((outfit) => outfit.id === secondaryPost.outfitId)?.itemIds?.[0]]?.image
     : items[1]?.image;
 
   return (
