@@ -12,6 +12,7 @@ export const Routes = {
   WardrobeAddFromCatalog: "WardrobeAddFromCatalog",
   WardrobeProcessingStub: "WardrobeProcessingStub",
   WardrobeConfirmItem: "WardrobeConfirmItem",
+  WardrobeMaskEditor: "WardrobeMaskEditor",
   WardrobeManageCatalogs: "WardrobeManageCatalogs",
   WardrobeManageCategories: "WardrobeManageCategories",
   WardrobeArchive: "WardrobeArchive",

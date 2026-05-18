@@ -1,7 +1,9 @@
 import inspect
+from io import BytesIO
 from uuid import uuid4
 
 from aiobotocore.session import get_session
+from PIL import Image
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -130,6 +132,31 @@ async def create_image_file_with_variants(
     for variant_type, variant_content in content_by_variant.items():
         await save_file_variant(connection, user_id, file_id, variant_type, variant_content, mime_type)
     return file_id
+
+
+def _png_bytes(image: Image.Image) -> bytes:
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def transparent_cutout_variants(content: bytes, *, padding_ratio: float = 0.08) -> dict[str, bytes]:
+    image = Image.open(BytesIO(content)).convert("RGBA")
+    alpha_bbox = image.getchannel("A").getbbox()
+    if not alpha_bbox:
+        return {"cutout": content, "card": content, "thumbnail": content}
+
+    left, top, right, bottom = alpha_bbox
+    padding = max(8, int(max(right - left, bottom - top) * padding_ratio))
+    crop_box = (
+        max(0, left - padding),
+        max(0, top - padding),
+        min(image.width, right + padding),
+        min(image.height, bottom + padding),
+    )
+    cropped = image.crop(crop_box)
+    cropped_bytes = _png_bytes(cropped)
+    return {"cutout": content, "card": cropped_bytes, "thumbnail": cropped_bytes}
 
 
 async def create_image_file(

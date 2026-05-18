@@ -1,7 +1,11 @@
+import base64
+import json
 from datetime import datetime, timezone
+from io import BytesIO
 
 from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
+from PIL import Image, ImageDraw, ImageOps
 
 from app.db.metadata import (
     brands,
@@ -21,7 +25,13 @@ from app.db.metadata import (
     wardrobe_item_templates,
     wardrobe_items,
 )
-from app.modules.files.service import get_file_url, new_id
+from app.modules.files.service import (
+    create_image_file_with_variants,
+    get_file_bytes,
+    get_file_url,
+    new_id,
+    transparent_cutout_variants,
+)
 from app.modules.wardrobe.schemas import (
     BootstrapResponse,
     CatalogResponse,
@@ -44,6 +54,8 @@ CATALOG_QUEUED_STATUS = "queued"
 CATALOG_PROCESSING_STATUS = "processing"
 CATALOG_READY_STATUS = "ready"
 CATALOG_FAILED_STATUS = "failed"
+VALID_MASK_ROTATIONS = {0, 90, 180, 270}
+MASK_EDITOR_MAX_SIZE = 1024
 
 
 def normalize_name(value: str) -> str:
@@ -509,9 +521,18 @@ async def _load_draft_row(connection: AsyncConnection, user_id: str, draft_id: s
 
 async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftResponse:
     payload = dict(row.get("suggested_payload_json") or {})
+    original_url = await get_file_url(connection, row.get("original_file_id"), "original")
+    if original_url is None:
+        original_url = await get_file_url(connection, row.get("original_file_id"), "card")
     cutout_url = await get_file_url(connection, row.get("processed_file_id"), "card")
     catalog_url = await get_file_url(connection, row.get("catalog_file_id"), "card")
     mask_url = await get_file_url(connection, row.get("mask_file_id"), "mask")
+    mask_bitmap = await _mask_bitmap_payload(connection, row.get("mask_file_id"))
+    original_preview_data_url = await _original_preview_data_url(
+        connection,
+        row.get("original_file_id"),
+        mask_bitmap,
+    )
 
     if row["processing_status"] == PRIMARY_READY_STATUS:
         primary_file_id = payload.get("primaryImageFileId") or row.get("processed_file_id") or row.get("original_file_id")
@@ -537,9 +558,145 @@ async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftRespo
         errorMessage=row.get("error_message"),
         catalogErrorMessage=row.get("catalog_error_message"),
         images=images,
+        originalImageUrl=original_url,
+        originalImagePreviewDataUrl=original_preview_data_url,
         maskImageUrl=mask_url,
+        maskBitmap=mask_bitmap,
         mlResult=row.get("ml_result_json"),
     )
+
+
+async def _original_preview_data_url(connection: AsyncConnection, original_file_id: str | None, mask_bitmap: dict | None) -> str | None:
+    original_bytes = await get_file_bytes(connection, original_file_id, "original")
+    if not original_bytes:
+        return None
+    image = ImageOps.exif_transpose(Image.open(BytesIO(original_bytes))).convert("RGB")
+    target_width = int(mask_bitmap.get("width") or 0) if mask_bitmap else 0
+    target_height = int(mask_bitmap.get("height") or 0) if mask_bitmap else 0
+    if target_width > 0 and target_height > 0:
+        image = image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    else:
+        scale = min(1, MASK_EDITOR_MAX_SIZE / max(image.size))
+        if scale < 1:
+            image = image.resize(
+                (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+                Image.Resampling.LANCZOS,
+            )
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG", quality=95, optimize=True)
+    return f"data:image/jpeg;base64,{base64.b64encode(buffer.getvalue()).decode('ascii')}"
+
+
+async def _mask_bitmap_payload(connection: AsyncConnection, mask_file_id: str | None) -> dict | None:
+    mask_bytes = await get_file_bytes(connection, mask_file_id, "mask")
+    if not mask_bytes:
+        return None
+    mask = Image.open(BytesIO(mask_bytes)).convert("L")
+    scale = min(1, MASK_EDITOR_MAX_SIZE / max(mask.size))
+    if scale < 1:
+        next_size = (max(1, round(mask.width * scale)), max(1, round(mask.height * scale)))
+        mask = mask.resize(next_size, Image.Resampling.LANCZOS)
+    raw = mask.tobytes()
+    return {
+        "width": mask.width,
+        "height": mask.height,
+        "dataBase64": base64.b64encode(raw).decode("ascii"),
+    }
+
+
+def _png_bytes(image: Image.Image) -> bytes:
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _apply_orientation(image: Image.Image, flip_horizontal: bool, rotation_degrees: int) -> Image.Image:
+    if flip_horizontal:
+        image = ImageOps.mirror(image)
+    if rotation_degrees == 90:
+        return image.transpose(Image.Transpose.ROTATE_270)
+    if rotation_degrees == 180:
+        return image.transpose(Image.Transpose.ROTATE_180)
+    if rotation_degrees == 270:
+        return image.transpose(Image.Transpose.ROTATE_90)
+    return image
+
+
+def _normalize_strokes(strokes_json: str | None) -> list[dict]:
+    if not strokes_json:
+        return []
+    value = json.loads(strokes_json)
+    if not isinstance(value, list):
+        raise ValueError("Mask edit strokes must be a list")
+    return value
+
+
+def rebuild_cutout_from_mask(
+    original_bytes: bytes,
+    existing_mask_bytes: bytes | None,
+    edited_mask_bytes: bytes | None,
+    *,
+    flip_horizontal: bool,
+    rotation_degrees: int,
+    strokes_json: str | None = None,
+) -> tuple[bytes, bytes]:
+    if rotation_degrees not in VALID_MASK_ROTATIONS:
+        raise ValueError("rotationDegrees must be one of 0, 90, 180, 270")
+
+    original = Image.open(BytesIO(original_bytes)).convert("RGBA")
+    transformed_original = _apply_orientation(original, flip_horizontal, rotation_degrees)
+
+    if edited_mask_bytes:
+        mask = Image.open(BytesIO(edited_mask_bytes)).convert("L")
+        if mask.size != original.size:
+            mask = mask.resize(original.size, Image.Resampling.LANCZOS)
+        mask = _apply_orientation(mask, flip_horizontal, rotation_degrees)
+    elif existing_mask_bytes:
+        mask = Image.open(BytesIO(existing_mask_bytes)).convert("L")
+        if mask.size != original.size:
+            mask = mask.resize(original.size, Image.Resampling.LANCZOS)
+        mask = _apply_orientation(mask, flip_horizontal, rotation_degrees)
+    else:
+        raise ValueError("Mask image is missing")
+
+    draw = ImageDraw.Draw(mask)
+    width, height = mask.size
+    for stroke in _normalize_strokes(strokes_json):
+        points = stroke.get("points") or []
+        if len(points) < 1:
+            continue
+        mode = stroke.get("mode")
+        fill = 0 if mode == "erase" else 255
+        brush_size = max(1, int(float(stroke.get("brushSize") or 20)))
+        xy = [
+            (
+                max(0, min(width - 1, float(point.get("x", 0)) * width)),
+                max(0, min(height - 1, float(point.get("y", 0)) * height)),
+            )
+            for point in points
+        ]
+        if len(xy) == 1:
+            x, y = xy[0]
+            radius = brush_size / 2
+            draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=fill)
+        else:
+            draw.line(xy, fill=fill, width=brush_size, joint="curve")
+            radius = brush_size / 2
+            for x, y in (xy[0], xy[-1]):
+                draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=fill)
+
+    cutout = transformed_original.copy()
+    cutout.putalpha(mask)
+    return _png_bytes(cutout), _png_bytes(mask)
+
+
+def pgm_mask_bytes_from_base64(mask_image_base64: str | None) -> bytes | None:
+    if not mask_image_base64:
+        return None
+    try:
+        return base64.b64decode(mask_image_base64, validate=True)
+    except ValueError as exc:
+        raise ValueError("maskImageBase64 must be valid base64") from exc
 
 
 async def create_draft(
@@ -638,6 +795,73 @@ async def enhance_draft(connection: AsyncConnection, user_id: str, draft_id: str
                 updated_at=datetime.now(timezone.utc),
             )
         )
+    return await get_draft(connection, user_id, draft_id)
+
+
+async def edit_draft_mask(
+    connection: AsyncConnection,
+    user_id: str,
+    draft_id: str,
+    *,
+    mask_bytes: bytes | None,
+    mask_image_base64: str | None,
+    flip_horizontal: bool,
+    rotation_degrees: int,
+    strokes_json: str | None,
+) -> DraftResponse:
+    row = await _load_draft_row(connection, user_id, draft_id)
+    if row["processing_status"] != PRIMARY_READY_STATUS:
+        raise ValueError("Draft is not ready for mask editing")
+    if not row.get("original_file_id"):
+        raise ValueError("Draft does not have an original image")
+
+    original_bytes = await get_file_bytes(connection, row["original_file_id"], "original")
+    existing_mask_bytes = await get_file_bytes(connection, row.get("mask_file_id"), "mask")
+    if not original_bytes:
+        raise ValueError("Original image bytes are unavailable")
+
+    edited_mask_bytes = mask_bytes or pgm_mask_bytes_from_base64(mask_image_base64)
+    cutout_bytes, new_mask_bytes = rebuild_cutout_from_mask(
+        original_bytes,
+        existing_mask_bytes,
+        edited_mask_bytes,
+        flip_horizontal=flip_horizontal,
+        rotation_degrees=rotation_degrees,
+        strokes_json=strokes_json,
+    )
+    filename = f"mask-edit-{draft_id}.png"
+    cutout_file_id = await create_image_file_with_variants(
+        connection,
+        user_id,
+        transparent_cutout_variants(cutout_bytes),
+        filename,
+        "image/png",
+    )
+    mask_file_id = await create_image_file_with_variants(
+        connection,
+        user_id,
+        {"mask": new_mask_bytes, "card": new_mask_bytes, "thumbnail": new_mask_bytes},
+        f"mask-{filename}",
+        "image/png",
+    )
+
+    payload = dict(row.get("suggested_payload_json") or {})
+    payload["primaryImageFileId"] = cutout_file_id
+    payload.pop("image", None)
+
+    await connection.execute(
+        update(item_drafts)
+        .where(item_drafts.c.id == draft_id, item_drafts.c.user_id == user_id)
+        .values(
+            processed_file_id=cutout_file_id,
+            mask_file_id=mask_file_id,
+            catalog_file_id=None,
+            catalog_processing_status=CATALOG_NOT_REQUESTED_STATUS,
+            catalog_error_message=None,
+            suggested_payload_json=payload,
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
     return await get_draft(connection, user_id, draft_id)
 
 

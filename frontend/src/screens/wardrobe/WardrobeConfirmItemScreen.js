@@ -32,8 +32,12 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
 
     setDraft((current) => {
       const normalized = normalizeWardrobeItemDraft(next.draft, current);
-      const selectedPrimaryImageId = current.primaryImageFileId ?? normalized.primaryImageFileId;
-      let selectedImage = current.image ?? normalized.image;
+      const optionIds = [next.images?.cutout?.fileId, next.images?.catalog?.fileId].filter(Boolean);
+      const currentSelectionIsValid = current.primaryImageFileId && optionIds.includes(current.primaryImageFileId);
+      const selectedPrimaryImageId = currentSelectionIsValid
+        ? current.primaryImageFileId
+        : normalized.primaryImageFileId;
+      let selectedImage = currentSelectionIsValid ? current.image ?? normalized.image : normalized.image;
 
       if (selectedPrimaryImageId && next.images?.catalog?.fileId === selectedPrimaryImageId) {
         selectedImage = imageSourceForOption(next.images.catalog) ?? selectedImage;
@@ -68,7 +72,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     return () => {
       alive = false;
     };
-  }, [actions, draftId]);
+  }, [actions, draftId, route.params?.maskEditedAt]);
 
   const pollCatalogStatus = async () => {
     if (!draftId) return;
@@ -131,6 +135,28 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
               primaryImageFileId: imageOption.fileId,
               image: imageSourceForOption(imageOption) ?? current.image,
             }))
+          }
+          onEditMask={
+            draftId &&
+            draft.sourceType !== "catalog" &&
+            draftState?.images?.cutout &&
+            (draftState?.originalImagePreviewDataUrl || draftState?.originalImageUrl) &&
+            draftState?.maskBitmap?.dataBase64
+              ? () =>
+                  actions.fetchDraft(draftId).then((latestDraftState) => {
+                    syncDraftState(latestDraftState);
+                    navigation.push(Routes.WardrobeMaskEditor, {
+                      draftId,
+                      editorOpenedAt: Date.now(),
+                      cutoutImageUrl: latestDraftState.images?.cutout?.imageUrl ?? draftState.images.cutout.imageUrl,
+                      maskImageUrl: latestDraftState.maskImageUrl ?? draftState.maskImageUrl,
+                      maskBitmap: latestDraftState.maskBitmap ?? draftState.maskBitmap,
+                      originalImagePreviewDataUrl:
+                        latestDraftState.originalImagePreviewDataUrl ?? draftState.originalImagePreviewDataUrl,
+                      originalImageUrl: latestDraftState.originalImageUrl ?? draftState.originalImageUrl,
+                    });
+                  })
+              : undefined
           }
           onEnhancePhoto={
             draftId && draft.sourceType !== "catalog"

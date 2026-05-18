@@ -162,6 +162,9 @@ export function WardrobeProvider({ children }) {
       async enhanceDraft(draftId) {
         return wardrobeApi.enhanceDraft(draftId);
       },
+      async editDraftMask(draftId, payload) {
+        return wardrobeApi.editDraftMask(draftId, payload);
+      },
       async confirmDraft(draftId, draft) {
         const saved = await wardrobeApi.confirmDraft(draftId, draft);
         animate();

@@ -9,6 +9,8 @@ export default function MediaPreview({
   containerStyle,
   resizeMode = "cover",
   placeholderScale = 0.56,
+  onLoad,
+  onError,
 }) {
   const actualSource = source ?? fallbackSource;
   const isPlaceholder = actualSource === fallbackSource;
@@ -28,7 +30,13 @@ export default function MediaPreview({
           ]}
         />
       ) : (
-        <Image source={actualSource} resizeMode={resizeMode} style={StyleSheet.absoluteFillObject} />
+        <Image
+          source={actualSource}
+          resizeMode={resizeMode}
+          onLoad={onLoad}
+          onError={onError}
+          style={StyleSheet.absoluteFillObject}
+        />
       )}
     </View>
   );

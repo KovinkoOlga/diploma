@@ -105,6 +105,22 @@ export async function enhanceDraft(draftId) {
   return draft;
 }
 
+export async function editDraftMask(draftId, { maskFile, maskImageBase64, flipHorizontal, rotationDegrees }) {
+  const formData = new FormData();
+  formData.append("flipHorizontal", flipHorizontal ? "true" : "false");
+  formData.append("rotationDegrees", String(rotationDegrees ?? 0));
+  if (maskFile) {
+    formData.append("mask", maskFile);
+  } else if (maskImageBase64) {
+    formData.append("maskImageBase64", maskImageBase64);
+  }
+  const draft = await apiPost(`/wardrobe/drafts/${draftId}/mask-edit`, formData);
+  if (draft?.draft) {
+    draft.draft = normalizeRemoteImage(draft.draft);
+  }
+  return draft;
+}
+
 export async function confirmDraft(draftId, payload) {
   return normalizeRemoteImage(await apiPost(`/wardrobe/drafts/${draftId}/confirm`, payload));
 }

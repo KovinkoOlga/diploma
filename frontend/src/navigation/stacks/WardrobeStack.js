@@ -12,6 +12,7 @@ import WardrobeAddFromGalleryScreen from "../../screens/wardrobe/WardrobeAddFrom
 import WardrobeAddFromCatalogScreen from "../../screens/wardrobe/WardrobeAddFromCatalogScreen";
 import WardrobeProcessingStubScreen from "../../screens/wardrobe/WardrobeProcessingStubScreen";
 import WardrobeConfirmItemScreen from "../../screens/wardrobe/WardrobeConfirmItemScreen";
+import WardrobeMaskEditorScreen from "../../screens/wardrobe/WardrobeMaskEditorScreen";
 import WardrobeManageCatalogsScreen from "../../screens/wardrobe/WardrobeManageCatalogsScreen";
 import WardrobeManageCategoriesScreen from "../../screens/wardrobe/WardrobeManageCategoriesScreen";
 import WardrobeArchiveScreen from "../../screens/wardrobe/WardrobeArchiveScreen";
@@ -53,6 +54,7 @@ export default function WardrobeStack() {
       <Stack.Screen name={Routes.WardrobeAddFromCatalog} component={WardrobeAddFromCatalogScreen} options={{ title: "Базовый каталог" }} />
       <Stack.Screen name={Routes.WardrobeProcessingStub} component={WardrobeProcessingStubScreen} options={{ title: "Обработка" }} />
       <Stack.Screen name={Routes.WardrobeConfirmItem} component={WardrobeConfirmItemScreen} options={{ title: "Подтверждение" }} />
+      <Stack.Screen name={Routes.WardrobeMaskEditor} component={WardrobeMaskEditorScreen} options={{ title: "Редактор обрезки" }} />
       <Stack.Screen name={Routes.WardrobeManageCatalogs} component={WardrobeManageCatalogsScreen} options={{ title: "Каталоги" }} />
       <Stack.Screen name={Routes.WardrobeManageCategories} component={WardrobeManageCategoriesScreen} options={{ title: "Категории" }} />
       <Stack.Screen name={Routes.WardrobeArchive} component={WardrobeArchiveScreen} options={{ title: "Архив" }} />

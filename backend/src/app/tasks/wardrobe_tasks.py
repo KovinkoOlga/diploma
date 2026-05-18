@@ -8,6 +8,7 @@ from app.db.metadata import files, item_drafts
 from app.modules.files.service import (
     create_image_file_with_variants,
     get_file_bytes,
+    transparent_cutout_variants,
 )
 from app.modules.ml_clients.bg_client import remove_background
 from app.modules.ml_clients.catalog_client import generate_catalog_image
@@ -105,7 +106,7 @@ async def run_prepare_item_photo(draft_id: str) -> None:
             cutout_file_id = draft.get("processed_file_id") or await create_image_file_with_variants(
                 connection,
                 draft["user_id"],
-                {"cutout": result.cutout_image, "card": result.cutout_image, "thumbnail": result.cutout_image},
+                transparent_cutout_variants(result.cutout_image),
                 f"cutout-{filename}",
                 result.mime_type,
             )

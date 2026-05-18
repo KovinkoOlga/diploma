@@ -24,6 +24,7 @@ export default function WardrobeItemForm({
   catalogProcessingStatus,
   catalogErrorMessage,
   onSelectImageOption,
+  onEditMask,
   onEnhancePhoto,
   enhanceBusy = false,
 }) {
@@ -60,6 +61,7 @@ export default function WardrobeItemForm({
         </Text>
         <MediaPreview
           source={draft.image}
+          resizeMode="contain"
           placeholderScale={0.48}
           containerStyle={{
             width: "100%",
@@ -88,6 +90,17 @@ export default function WardrobeItemForm({
                 />
               ) : null}
             </View>
+            {onEditMask ? (
+              <View style={{ marginTop: spacing.sm }}>
+                <ActionButton
+                  label="Редактировать обрезку"
+                  icon="create-outline"
+                  variant="secondary"
+                  onPress={onEditMask}
+                  fullWidth
+                />
+              </View>
+            ) : null}
           </View>
         ) : null}
         {onEnhancePhoto ? (

@@ -250,6 +250,36 @@ async def draft_from_template(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
+@router.post("/drafts/{draft_id}/mask-edit", response_model=DraftResponse)
+@router.post("/drafts/{draft_id}/mask-edit/", response_model=DraftResponse, include_in_schema=False)
+async def edit_draft_mask(
+    draft_id: str,
+    flipHorizontal: bool = Form(False),
+    rotationDegrees: int = Form(0),
+    maskImageBase64: str | None = Form(None),
+    strokes: str | None = Form(None),
+    mask: UploadFile | None = File(None),
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> DraftResponse:
+    try:
+        mask_bytes = await mask.read() if mask is not None else None
+        return await service.edit_draft_mask(
+            connection,
+            _user_id(current_user),
+            draft_id,
+            mask_bytes=mask_bytes,
+            mask_image_base64=maskImageBase64,
+            flip_horizontal=flipHorizontal,
+            rotation_degrees=rotationDegrees,
+            strokes_json=strokes,
+        )
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
 @router.get("/drafts/{draft_id}", response_model=DraftResponse)
 async def get_draft(
     draft_id: str,

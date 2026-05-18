@@ -148,5 +148,8 @@ class DraftResponse(BaseModel):
     errorMessage: str | None = None
     catalogErrorMessage: str | None = None
     images: DraftImagesResponse | None = None
+    originalImageUrl: str | None = None
+    originalImagePreviewDataUrl: str | None = None
     maskImageUrl: str | None = None
+    maskBitmap: dict[str, Any] | None = None
     mlResult: dict[str, Any] | None = None
