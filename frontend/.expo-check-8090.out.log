@@ -1,0 +1,13 @@
+Starting project at C:\Users\olya0\Desktop\ВУЗ\Прикладная Информатика\Диплом\diploma\diploma\frontend
+Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+Starting Metro Bundler
+Waiting on http://localhost:8090
+Logs for your project will appear below.
+iOS .\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+iOS .\index.js ▓░░░░░░░░░░░░░░░  8.7% ( 50/173)
+iOS .\index.js ▓▓▓▓▓▓▓░░░░░░░░░ 46.4% (357/546)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 77.5% (668/759)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 77.5% ( 966/1160)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 88.9% (1265/1342)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 96.3% (1702/1734)
+iOS Bundled 22918ms index.js (1764 modules)

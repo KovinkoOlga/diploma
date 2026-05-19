@@ -1,6 +1,7 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Canvas, Circle, Group, Image as SkiaImage, Path, rect, useImage } from "@shopify/react-native-skia";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MediaPreview from "../../components/MediaPreview";
 import Screen from "../../components/Screen";
@@ -10,6 +11,7 @@ import { useAppTheme } from "../../theme/ThemeProvider";
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
+const HISTORY_LIMIT = 50;
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const PNG_SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 const OVERLAY_RGB = [112, 92, 255];
@@ -192,6 +194,15 @@ function distance(touches) {
   return Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY);
 }
 
+function midpoint(touches) {
+  if (touches.length < 2) return { x: 0, y: 0 };
+  const [a, b] = touches;
+  return {
+    x: (a.pageX + b.pageX) / 2,
+    y: (a.pageY + b.pageY) / 2,
+  };
+}
+
 function fitRect(container, imageWidth, imageHeight) {
   if (!container.width || !container.height || !imageWidth || !imageHeight) {
     return { x: 0, y: 0, width: container.width || 1, height: container.height || 1 };
@@ -219,6 +230,72 @@ function clampEditorOffset(value, container, contentRect, zoomValue) {
     y: clamp(value.y, -maxY, maxY),
   };
   return next.x === value.x && next.y === value.y ? value : next;
+}
+
+function createImagePreviewTransform(displayRect, zoomValue, offsetValue, flipHorizontalValue, rotationDegreesValue) {
+  const origin = {
+    x: displayRect.x + displayRect.width / 2,
+    y: displayRect.y + displayRect.height / 2,
+  };
+  const radians = (rotationDegreesValue * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const safeZoom = zoomValue || 1;
+  const flipScale = flipHorizontalValue ? -1 : 1;
+
+  const normalizedToImageLocal = (point) => ({
+    x: displayRect.x + point.x * displayRect.width,
+    y: displayRect.y + point.y * displayRect.height,
+  });
+
+  const normalizedToPreview = (point) => {
+    let dx = (point.x - 0.5) * displayRect.width;
+    const dy = (point.y - 0.5) * displayRect.height;
+    dx *= flipScale;
+    const rotatedX = dx * cos - dy * sin;
+    const rotatedY = dx * sin + dy * cos;
+    return {
+      x: origin.x + rotatedX * safeZoom + offsetValue.x,
+      y: origin.y + rotatedY * safeZoom + offsetValue.y,
+    };
+  };
+
+  const previewToNormalized = (point) => {
+    if (!displayRect.width || !displayRect.height) return null;
+    const dx = (point.x - origin.x - offsetValue.x) / safeZoom;
+    const dy = (point.y - origin.y - offsetValue.y) / safeZoom;
+    const rotatedX = dx * cos + dy * sin;
+    const rotatedY = -dx * sin + dy * cos;
+    const normalized = {
+      x: (rotatedX * flipScale) / displayRect.width + 0.5,
+      y: rotatedY / displayRect.height + 0.5,
+    };
+    if (normalized.x < 0 || normalized.x > 1 || normalized.y < 0 || normalized.y > 1) {
+      return null;
+    }
+    return normalized;
+  };
+
+  return {
+    origin,
+    normalizedToImageLocal,
+    normalizedToPreview,
+    previewToNormalized,
+    reactNativeTransform: [
+      { translateX: offsetValue.x },
+      { translateY: offsetValue.y },
+      { scale: safeZoom },
+      { rotate: `${rotationDegreesValue}deg` },
+      { scaleX: flipScale },
+    ],
+    skiaTransform: [
+      { translateX: offsetValue.x },
+      { translateY: offsetValue.y },
+      { scale: safeZoom },
+      { rotate: radians },
+      { scaleX: flipScale },
+    ],
+  };
 }
 
 function createFallbackMask(width = 192, height = 192) {
@@ -262,6 +339,121 @@ function drawLine(mask, width, height, from, to, brushSize, value) {
     const t = step / steps;
     drawCircle(mask, width, height, x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, radius, value);
   }
+}
+
+function applyStrokesToMask(initialMask, width, height, strokes) {
+  const next = new Uint8Array(initialMask);
+  for (const stroke of strokes) {
+    if (!stroke?.points?.length) continue;
+    const value = stroke.mode === "erase" ? 255 : 0;
+    if (stroke.points.length === 1) {
+      drawLine(next, width, height, stroke.points[0], stroke.points[0], stroke.brushSize, value);
+      continue;
+    }
+    for (let index = 1; index < stroke.points.length; index += 1) {
+      drawLine(next, width, height, stroke.points[index - 1], stroke.points[index], stroke.brushSize, value);
+    }
+  }
+  return next;
+}
+
+function pointDistanceInMaskPixels(from, to, width, height) {
+  return Math.hypot((to.x - from.x) * (width - 1), (to.y - from.y) * (height - 1));
+}
+
+function shouldAppendStrokePoint(from, to, brushSize, width, height) {
+  return pointDistanceInMaskPixels(from, to, width, height) >= Math.max(0.75, brushSize / 8);
+}
+
+function pointToCanvas(point, width, height) {
+  return {
+    x: point.x * width,
+    y: point.y * height,
+  };
+}
+
+function createStrokePath(points, width, height, offsetX = 0, offsetY = 0) {
+  if (!points.length) return "";
+  const first = pointToCanvas(points[0], width, height);
+  let path = `M ${offsetX + first.x} ${offsetY + first.y}`;
+  for (let index = 1; index < points.length; index += 1) {
+    const next = pointToCanvas(points[index], width, height);
+    path += ` L ${offsetX + next.x} ${offsetY + next.y}`;
+  }
+  return path;
+}
+
+function strokeWidthForDisplay(stroke, displayWidth, displayHeight, maskWidth, maskHeight) {
+  if (!maskWidth || !maskHeight) return stroke.brushSize;
+  const scaleX = displayWidth / maskWidth;
+  const scaleY = displayHeight / maskHeight;
+  return Math.max(1, stroke.brushSize * ((scaleX + scaleY) / 2));
+}
+
+function SkiaMaskOverlay({
+  overlayUri,
+  displayRect,
+  previewTransform,
+  maskWidth,
+  maskHeight,
+  strokes,
+  currentStroke,
+}) {
+  const initialOverlay = useImage(overlayUri);
+  const overlayColor = `rgba(${OVERLAY_RGB[0]}, ${OVERLAY_RGB[1]}, ${OVERLAY_RGB[2]}, ${OVERLAY_ALPHA / 255})`;
+  const renderStrokes = currentStroke ? [...strokes, currentStroke] : strokes;
+  const imageClip = rect(displayRect.x, displayRect.y, displayRect.width, displayRect.height);
+
+  return (
+    <Canvas pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+      <Group layer origin={previewTransform.origin} transform={previewTransform.skiaTransform}>
+        <Group clip={imageClip}>
+          {initialOverlay ? (
+            <SkiaImage
+              image={initialOverlay}
+              x={displayRect.x}
+              y={displayRect.y}
+              width={displayRect.width}
+              height={displayRect.height}
+              fit="fill"
+            />
+          ) : null}
+          {renderStrokes.map((stroke) => {
+            const strokeWidth = strokeWidthForDisplay(stroke, displayRect.width, displayRect.height, maskWidth, maskHeight);
+            const blendMode = stroke.mode === "erase" ? "clear" : "src";
+            const color = stroke.mode === "erase" ? "rgba(0, 0, 0, 0)" : overlayColor;
+            if (stroke.points.length === 1) {
+              const point = pointToCanvas(stroke.points[0], displayRect.width, displayRect.height);
+              return (
+                <Circle
+                  key={stroke.id}
+                  cx={displayRect.x + point.x}
+                  cy={displayRect.y + point.y}
+                  r={strokeWidth / 2}
+                  color={color}
+                  blendMode={blendMode}
+                  antiAlias
+                />
+              );
+            }
+            return (
+              <Path
+                key={stroke.id}
+                path={createStrokePath(stroke.points, displayRect.width, displayRect.height, displayRect.x, displayRect.y)}
+                color={color}
+                style="stroke"
+                strokeWidth={strokeWidth}
+                strokeCap="round"
+                strokeJoin="round"
+                blendMode={blendMode}
+                antiAlias
+              />
+            );
+          })}
+        </Group>
+      </Group>
+    </Canvas>
+  );
 }
 
 function ToolbarButton({ icon, active, onPress, disabled, label, children, large }) {
@@ -331,9 +523,10 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
 
   const [mode, setMode] = useState("erase");
   const [brushSize, setBrushSize] = useState(18);
-  const [maskData, setMaskData] = useState(initialMaskPayload.data);
-  const [undoStack, setUndoStack] = useState([]);
-  const [redoStack, setRedoStack] = useState([]);
+  const [strokes, setStrokes] = useState([]);
+  const [currentStroke, setCurrentStroke] = useState(null);
+  const [redoStrokes, setRedoStrokes] = useState([]);
+  const [undoLockedCount, setUndoLockedCount] = useState(0);
   const [flipHorizontal, setFlipHorizontal] = useState(false);
   const [rotationDegrees, setRotationDegrees] = useState(0);
   const [zoom, setZoom] = useState(1);
@@ -344,11 +537,25 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [imageSize, setImageSize] = useState({ width: initialWidth, height: initialHeight });
-  const lastPointRef = useRef(null);
-  const maskDataRef = useRef(initialMaskPayload.data);
+  const initialMaskDataRef = useRef(initialMaskPayload.data);
+  const previewFrameRef = useRef(null);
+  const previewFramePageRef = useRef({ x: 0, y: 0, width: 0, height: 0, measured: false });
+  const strokesRef = useRef([]);
+  const currentStrokeRef = useRef(null);
+  const undoLockedCountRef = useRef(0);
+  const zoomRef = useRef(1);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const canvasSizeRef = useRef({ width: 1, height: 1 });
   const flipHorizontalRef = useRef(false);
   const rotationDegreesRef = useRef(0);
-  const gestureRef = useRef({ pinchStart: 0, zoomStart: 1, offsetStart: { x: 0, y: 0 } });
+  const strokeIdRef = useRef(0);
+  const gestureRef = useRef({
+    type: "idle",
+    pinchStart: 0,
+    pinchCenterStart: { x: 0, y: 0 },
+    zoomStart: 1,
+    offsetStart: { x: 0, y: 0 },
+  });
 
   const maskWidth = initialWidth;
   const maskHeight = initialHeight;
@@ -356,25 +563,18 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   const imageSource = useMemo(() => (imageUrl ? { uri: imageUrl } : null), [imageUrl]);
   const maskReady = initialMaskPayload.valid;
   const displayRect = useMemo(() => fitRect(canvasSize, imageSize.width, imageSize.height), [canvasSize, imageSize]);
-  const displayStyle = useMemo(
-    () => ({
-      left: displayRect.x,
-      top: displayRect.y,
-      width: displayRect.width,
-      height: displayRect.height,
-    }),
-    [displayRect]
+  const displayRectRef = useRef(displayRect);
+  const overlayUri = useMemo(
+    () => createOverlayPngUri(initialMaskPayload.data, maskWidth, maskHeight),
+    [initialMaskPayload.data, maskHeight, maskWidth]
   );
-  const overlayUri = useMemo(() => createOverlayPngUri(maskData, maskWidth, maskHeight), [maskData, maskHeight, maskWidth]);
-  const layerTransform = useMemo(
-    () => [
-      { translateX: offset.x },
-      { translateY: offset.y },
-      { scale: zoom },
-      { scaleX: flipHorizontal ? -1 : 1 },
-      { rotate: `${rotationDegrees}deg` },
-    ],
-    [flipHorizontal, offset.x, offset.y, rotationDegrees, zoom]
+  const previewTransform = useMemo(
+    () => createImagePreviewTransform(displayRect, zoom, offset, flipHorizontal, rotationDegrees),
+    [displayRect, flipHorizontal, offset, rotationDegrees, zoom]
+  );
+  const layerTransformOrigin = useMemo(
+    () => [previewTransform.origin.x, previewTransform.origin.y, 0],
+    [previewTransform.origin.x, previewTransform.origin.y]
   );
 
   useEffect(() => {
@@ -404,10 +604,18 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   }, [imageUrl, maskHeight, maskWidth]);
 
   useEffect(() => {
-    setMaskData(initialMaskPayload.data);
-    maskDataRef.current = initialMaskPayload.data;
-    setUndoStack([]);
-    setRedoStack([]);
+    initialMaskDataRef.current = initialMaskPayload.data;
+    strokesRef.current = [];
+    currentStrokeRef.current = null;
+    undoLockedCountRef.current = 0;
+    setStrokes([]);
+    setCurrentStroke(null);
+    setRedoStrokes([]);
+    setUndoLockedCount(0);
+    zoomRef.current = 1;
+    offsetRef.current = { x: 0, y: 0 };
+    flipHorizontalRef.current = false;
+    rotationDegreesRef.current = 0;
     setZoom(1);
     setOffset({ x: 0, y: 0 });
     setFlipHorizontal(false);
@@ -415,8 +623,24 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   }, [initialMaskPayload.data]);
 
   useEffect(() => {
-    maskDataRef.current = maskData;
-  }, [maskData]);
+    strokesRef.current = strokes;
+  }, [strokes]);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+
+  useEffect(() => {
+    canvasSizeRef.current = canvasSize;
+  }, [canvasSize]);
+
+  useEffect(() => {
+    displayRectRef.current = displayRect;
+  }, [displayRect]);
 
   useEffect(() => {
     flipHorizontalRef.current = flipHorizontal;
@@ -427,33 +651,77 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   }, [rotationDegrees]);
 
   useEffect(() => {
-    setOffset((current) => clampEditorOffset(current, canvasSize, displayRect, zoom));
-  }, [canvasSize, displayRect, zoom]);
-
-  const pointFromLocation = (locationX, locationY) => {
-    const centerX = displayRect.x + displayRect.width / 2;
-    const centerY = displayRect.y + displayRect.height / 2;
-    let dx = (locationX - centerX - offset.x) / zoom;
-    let dy = (locationY - centerY - offset.y) / zoom;
-    const radians = (-rotationDegrees * Math.PI) / 180;
-    const rotatedX = dx * Math.cos(radians) - dy * Math.sin(radians);
-    const rotatedY = dx * Math.sin(radians) + dy * Math.cos(radians);
-    dx = flipHorizontal ? -rotatedX : rotatedX;
-    dy = rotatedY;
-    return {
-      x: clamp(dx / displayRect.width + 0.5, 0, 1),
-      y: clamp(dy / displayRect.height + 0.5, 0, 1),
-    };
-  };
-
-  const applyPoint = (point, previousPoint = point) => {
-    const value = mode === "erase" ? 255 : 0;
-    setMaskData((current) => {
-      const next = new Uint8Array(current);
-      drawLine(next, maskWidth, maskHeight, previousPoint, point, brushSize, value);
+    setOffset((current) => {
+      const next = clampEditorOffset(current, canvasSize, displayRect, zoom);
+      offsetRef.current = next;
       return next;
     });
-  };
+  }, [canvasSize, displayRect, zoom]);
+
+  const measurePreviewFrame = useCallback(() => {
+    previewFrameRef.current?.measureInWindow?.((x, y, width, height) => {
+      previewFramePageRef.current = { x, y, width, height, measured: true };
+    });
+  }, []);
+
+  const handlePreviewLayout = useCallback(
+    (event) => {
+      const nextSize = event.nativeEvent.layout;
+      canvasSizeRef.current = nextSize;
+      setCanvasSize(nextSize);
+      measurePreviewFrame();
+    },
+    [measurePreviewFrame]
+  );
+
+  const previewPointFromEvent = useCallback((event) => {
+    const touch = event.nativeEvent.touches?.[0] ?? event.nativeEvent;
+    const pageX = touch?.pageX ?? event.nativeEvent.pageX;
+    const pageY = touch?.pageY ?? event.nativeEvent.pageY;
+    const frame = previewFramePageRef.current;
+    if (frame.measured && typeof pageX === "number" && typeof pageY === "number") {
+      return { x: pageX - frame.x, y: pageY - frame.y };
+    }
+    return { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY };
+  }, []);
+
+  const pointFromEvent = useCallback((event) => {
+    const transform = createImagePreviewTransform(
+      displayRectRef.current,
+      zoomRef.current,
+      offsetRef.current,
+      flipHorizontalRef.current,
+      rotationDegreesRef.current
+    );
+    return transform.previewToNormalized(previewPointFromEvent(event));
+  }, [previewPointFromEvent]);
+
+  const createStrokeAtPoint = useCallback(
+    (point) => {
+      const nextStroke = {
+        id: `stroke-${Date.now()}-${strokeIdRef.current}`,
+        mode,
+        brushSize,
+        points: [point],
+      };
+      strokeIdRef.current += 1;
+      return nextStroke;
+    },
+    [brushSize, mode]
+  );
+
+  const commitStroke = useCallback((stroke) => {
+    if (!stroke?.points?.length) return;
+    setStrokes((prev) => {
+      const next = [...prev, stroke];
+      const nextLockedCount = Math.max(undoLockedCountRef.current, next.length - HISTORY_LIMIT);
+      undoLockedCountRef.current = nextLockedCount;
+      setUndoLockedCount(nextLockedCount);
+      strokesRef.current = next;
+      return next;
+    });
+    setRedoStrokes([]);
+  }, []);
 
   const panResponder = useMemo(
     () =>
@@ -463,82 +731,172 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
         onMoveShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponderCapture: () => true,
         onPanResponderGrant: (event) => {
-          const touches = event.nativeEvent.touches;
-          gestureRef.current = { pinchStart: distance(touches), zoomStart: zoom, offsetStart: offset };
-          if (touches.length > 1) return;
-          hasLocalEditsRef.current = true;
-          setUndoStack((prev) => [...prev, maskData]);
-          setRedoStack([]);
-          const point = pointFromLocation(event.nativeEvent.locationX, event.nativeEvent.locationY);
-          lastPointRef.current = point;
-          applyPoint(point);
-        },
-        onPanResponderMove: (event, gestureState) => {
+          measurePreviewFrame();
           const touches = event.nativeEvent.touches;
           if (touches.length > 1) {
-            const startDistance = gestureRef.current.pinchStart || distance(touches);
-            const nextZoom = clamp(gestureRef.current.zoomStart * (distance(touches) / startDistance), MIN_ZOOM, MAX_ZOOM);
-            const nextOffset = clampEditorOffset(
-              {
-                x: gestureRef.current.offsetStart.x + gestureState.dx,
-                y: gestureRef.current.offsetStart.y + gestureState.dy,
-              },
-              canvasSize,
-              displayRect,
-              nextZoom
-            );
-            setZoom(nextZoom);
-            setOffset(nextOffset);
-            lastPointRef.current = null;
+            gestureRef.current = {
+              type: "pinch",
+              pinchStart: Math.max(1, distance(touches)),
+              pinchCenterStart: midpoint(touches),
+              zoomStart: zoomRef.current,
+              offsetStart: offsetRef.current,
+            };
+            currentStrokeRef.current = null;
+            setCurrentStroke(null);
             return;
           }
-          const point = pointFromLocation(event.nativeEvent.locationX, event.nativeEvent.locationY);
-          applyPoint(point, lastPointRef.current || point);
-          lastPointRef.current = point;
+          gestureRef.current = {
+            type: "draw",
+            pinchStart: 0,
+            pinchCenterStart: { x: 0, y: 0 },
+            zoomStart: zoomRef.current,
+            offsetStart: offsetRef.current,
+          };
+          const point = pointFromEvent(event);
+          if (!point) {
+            currentStrokeRef.current = null;
+            setCurrentStroke(null);
+            return;
+          }
+          hasLocalEditsRef.current = true;
+          const nextStroke = createStrokeAtPoint(point);
+          currentStrokeRef.current = nextStroke;
+          setCurrentStroke(nextStroke);
+          if (strokesRef.current.length < undoLockedCountRef.current) {
+            undoLockedCountRef.current = strokesRef.current.length;
+            setUndoLockedCount(strokesRef.current.length);
+          }
+        },
+        onPanResponderMove: (event) => {
+          const touches = event.nativeEvent.touches;
+          if (touches.length > 1) {
+            if (gestureRef.current.type !== "pinch" || !gestureRef.current.pinchStart) {
+              gestureRef.current = {
+                type: "pinch",
+                pinchStart: Math.max(1, distance(touches)),
+                pinchCenterStart: midpoint(touches),
+                zoomStart: zoomRef.current,
+                offsetStart: offsetRef.current,
+              };
+              currentStrokeRef.current = null;
+              setCurrentStroke(null);
+              return;
+            }
+            const currentCenter = midpoint(touches);
+            const nextZoom = clamp(
+              gestureRef.current.zoomStart * (distance(touches) / gestureRef.current.pinchStart),
+              MIN_ZOOM,
+              MAX_ZOOM
+            );
+            const nextOffset = clampEditorOffset(
+              {
+                x: gestureRef.current.offsetStart.x + currentCenter.x - gestureRef.current.pinchCenterStart.x,
+                y: gestureRef.current.offsetStart.y + currentCenter.y - gestureRef.current.pinchCenterStart.y,
+              },
+              canvasSizeRef.current,
+              displayRectRef.current,
+              nextZoom
+            );
+            zoomRef.current = nextZoom;
+            offsetRef.current = nextOffset;
+            setZoom(nextZoom);
+            setOffset(nextOffset);
+            return;
+          }
+          if (gestureRef.current.type === "pinch") {
+            return;
+          }
+          const point = pointFromEvent(event);
+          if (!point) {
+            if (currentStrokeRef.current?.points?.length) {
+              commitStroke(currentStrokeRef.current);
+              currentStrokeRef.current = null;
+              setCurrentStroke(null);
+            }
+            return;
+          }
+          setCurrentStroke((stroke) => {
+            if (!stroke) {
+              hasLocalEditsRef.current = true;
+              const nextStroke = createStrokeAtPoint(point);
+              currentStrokeRef.current = nextStroke;
+              return nextStroke;
+            }
+            const previousPoint = stroke.points[stroke.points.length - 1] || point;
+            if (!shouldAppendStrokePoint(previousPoint, point, stroke.brushSize, maskWidth, maskHeight)) {
+              return stroke;
+            }
+            const nextStroke = { ...stroke, points: [...stroke.points, point] };
+            currentStrokeRef.current = nextStroke;
+            return nextStroke;
+          });
         },
         onPanResponderRelease: () => {
-          lastPointRef.current = null;
+          const stroke = currentStrokeRef.current;
+          commitStroke(stroke);
+          currentStrokeRef.current = null;
+          setCurrentStroke(null);
+          gestureRef.current = {
+            type: "idle",
+            pinchStart: 0,
+            pinchCenterStart: { x: 0, y: 0 },
+            zoomStart: zoomRef.current,
+            offsetStart: offsetRef.current,
+          };
         },
         onPanResponderTerminate: () => {
-          lastPointRef.current = null;
+          const stroke = currentStrokeRef.current;
+          commitStroke(stroke);
+          currentStrokeRef.current = null;
+          setCurrentStroke(null);
+          gestureRef.current = {
+            type: "idle",
+            pinchStart: 0,
+            pinchCenterStart: { x: 0, y: 0 },
+            zoomStart: zoomRef.current,
+            offsetStart: offsetRef.current,
+          };
         },
       }),
     [
       brushSize,
-      canvasSize.height,
-      canvasSize.width,
-      displayRect.height,
-      displayRect.width,
-      displayRect.x,
-      displayRect.y,
-      flipHorizontal,
-      maskData,
+      commitStroke,
+      createStrokeAtPoint,
+      maskHeight,
+      maskWidth,
+      measurePreviewFrame,
       mode,
-      offset,
-      rotationDegrees,
-      zoom,
+      pointFromEvent,
     ]
   );
 
   const undo = () => {
     hasLocalEditsRef.current = true;
-    setUndoStack((prev) => {
+    setStrokes((prev) => {
+      if (prev.length <= undoLockedCountRef.current) return prev;
       const previous = prev[prev.length - 1];
       if (previous) {
-        setRedoStack((redo) => [...redo, maskData]);
-        setMaskData(previous);
+        setRedoStrokes((redo) => [...redo.slice(-(HISTORY_LIMIT - 1)), previous]);
       }
-      return prev.slice(0, -1);
+      const next = prev.slice(0, -1);
+      strokesRef.current = next;
+      return next;
     });
   };
 
   const redo = () => {
     hasLocalEditsRef.current = true;
-    setRedoStack((prev) => {
+    setRedoStrokes((prev) => {
       const next = prev[prev.length - 1];
       if (next) {
-        setUndoStack((undoHistory) => [...undoHistory, maskData]);
-        setMaskData(next);
+        setStrokes((undoHistory) => {
+          const nextStrokes = [...undoHistory, next];
+          const nextLockedCount = Math.max(undoLockedCountRef.current, nextStrokes.length - HISTORY_LIMIT);
+          undoLockedCountRef.current = nextLockedCount;
+          setUndoLockedCount(nextLockedCount);
+          strokesRef.current = nextStrokes;
+          return nextStrokes;
+        });
       }
       return prev.slice(0, -1);
     });
@@ -557,9 +915,12 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
     setSaving(true);
     setError("");
     try {
+      const activeStroke = currentStrokeRef.current;
+      const saveStrokes = activeStroke?.points?.length ? [...strokesRef.current, activeStroke] : strokesRef.current;
+      const finalMaskData = applyStrokesToMask(initialMaskDataRef.current, maskWidth, maskHeight, saveStrokes);
       await actions.editDraftMask(draftId, {
         maskFile: {
-          uri: createPgmUri(maskDataRef.current, maskWidth, maskHeight),
+          uri: createPgmUri(finalMaskData, maskWidth, maskHeight),
           name: `wardrobe-mask-${draftId}.pgm`,
           type: "image/x-portable-graymap",
         },
@@ -611,13 +972,14 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
     <Screen style={{ backgroundColor: "#ffffff" }} edges={["left", "right"]} contentStyle={{ backgroundColor: "#050505" }}>
       <View style={styles.editorArea}>
         <View
+          ref={previewFrameRef}
           style={[styles.previewFrame, { borderColor: colors.border }]}
-          onLayout={(event) => setCanvasSize(event.nativeEvent.layout)}
+          onLayout={handlePreviewLayout}
           {...(canEdit ? panResponder.panHandlers : {})}
         >
           {imageUrl && maskReady && !imageFailed ? (
             <>
-              <View style={[styles.layerFrame, { transform: layerTransform }]}>
+              <View style={[styles.layerFrame, { transform: previewTransform.reactNativeTransform, transformOrigin: layerTransformOrigin }]}>
                 <MediaPreview
                   source={imageSource}
                   resizeMode="contain"
@@ -635,15 +997,16 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
                     setImageFailed(true);
                   }}
                 />
-                <View style={[displayStyle]}>
-                  <Image
-                    source={{ uri: overlayUri }}
-                    resizeMode="contain"
-                    pointerEvents="none"
-                    style={StyleSheet.absoluteFillObject}
-                  />
-                </View>
               </View>
+              <SkiaMaskOverlay
+                overlayUri={overlayUri}
+                displayRect={displayRect}
+                previewTransform={previewTransform}
+                maskWidth={maskWidth}
+                maskHeight={maskHeight}
+                strokes={strokes}
+                currentStroke={currentStroke}
+              />
               {!imageLoaded ? (
                 <View style={styles.loadingLayer} pointerEvents="none">
                   <ActivityIndicator color="#FFFFFF" />
@@ -729,19 +1092,41 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
         </View>
         <View style={styles.secondaryToolRow}>
           <View style={styles.actionGroup}>
-            <ToolbarButton large label="Отменить" icon="arrow-undo-outline" disabled={!undoStack.length} onPress={undo} />
+            <ToolbarButton large label="Отменить" icon="arrow-undo-outline" disabled={strokes.length <= undoLockedCount} onPress={undo} />
           </View>
           <View style={styles.actionGroup}>
-            <ToolbarButton large label="Вернуть" icon="arrow-redo-outline" disabled={!redoStack.length} onPress={redo} />
+            <ToolbarButton large label="Вернуть" icon="arrow-redo-outline" disabled={!redoStrokes.length} onPress={redo} />
           </View>
           <View style={[styles.separator, { backgroundColor: colors.border }]} />
           <View style={styles.actionGroup}>
-            <ToolbarButton large label="Отразить" active={flipHorizontal} onPress={() => setFlipHorizontal((value) => !value)}>
+            <ToolbarButton
+              large
+              label="Отразить"
+              active={flipHorizontal}
+              onPress={() =>
+                setFlipHorizontal((value) => {
+                  const next = !value;
+                  flipHorizontalRef.current = next;
+                  return next;
+                })
+              }
+            >
               <MirrorIcon color={flipHorizontal ? colors.chipActiveText : colors.text} />
             </ToolbarButton>
           </View>
           <View style={styles.actionGroup}>
-            <ToolbarButton large label="Поворот влево" icon="refresh-outline" onPress={() => setRotationDegrees((value) => (value + 270) % 360)} />
+            <ToolbarButton
+              large
+              label="Поворот влево"
+              icon="refresh-outline"
+              onPress={() =>
+                setRotationDegrees((value) => {
+                  const next = (value + 270) % 360;
+                  rotationDegreesRef.current = next;
+                  return next;
+                })
+              }
+            />
           </View>
         </View>
       </View>
@@ -780,7 +1165,6 @@ const styles = StyleSheet.create({
   },
   layerFrame: {
     ...StyleSheet.absoluteFillObject,
-    "position": "absolute0"
   },
   loadingLayer: {
     ...StyleSheet.absoluteFillObject,
