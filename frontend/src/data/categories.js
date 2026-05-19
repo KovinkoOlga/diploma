@@ -2,48 +2,42 @@ export const wardrobeCategories = [
   {
     id: "tops",
     title: "Верх",
-    icon: "shirt-outline",
+    icon: "tops",
     subcategories: ["Футболки", "Рубашки", "Свитеры", "Худи", "Топы"],
   },
   {
     id: "bottoms",
     title: "Низ",
-    icon: "swap-vertical-outline",
+    icon: "bottoms",
     subcategories: ["Джинсы", "Брюки", "Юбки", "Шорты"],
   },
   {
     id: "dresses",
-    title: "Платья / комбинезоны",
-    icon: "woman-outline",
+    title: "Слитное",
+    icon: "dresses",
     subcategories: ["Платья", "Комбинезоны"],
   },
   {
     id: "outerwear",
     title: "Верхняя одежда",
-    icon: "snow-outline",
+    icon: "outerwear",
     subcategories: ["Пальто", "Куртки", "Тренчи", "Жилеты"],
   },
   {
     id: "shoes",
     title: "Обувь",
-    icon: "footsteps-outline",
+    icon: "shoes",
     subcategories: ["Кроссовки", "Ботинки", "Туфли", "Сандалии"],
   },
   {
-    id: "bags",
-    title: "Сумки",
-    icon: "bag-handle-outline",
-    subcategories: ["Шоперы", "Кросс-боди", "Рюкзаки", "Клатчи"],
-  },
-  {
     id: "accessories",
-    title: "Аксессуары",
-    icon: "watch-outline",
-    subcategories: ["Шарфы", "Украшения", "Ремни", "Головные уборы"],
+    title: "Сумки и аксессуары",
+    icon: "accessories",
+    subcategories: ["Шоперы", "Кросс-боди", "Рюкзаки", "Клатчи", "Шарфы", "Украшения", "Ремни", "Головные уборы"],
   },
 ];
 
-export const wardrobeVirtualCategories = [{ id: "all", title: "Все вещи", icon: "apps-outline" }];
+export const wardrobeVirtualCategories = [{ id: "all", title: "Все вещи", icon: "all" }];
 
 export const wardrobeCategoryTiles = [...wardrobeVirtualCategories, ...wardrobeCategories];
 export const categories = wardrobeCategories;

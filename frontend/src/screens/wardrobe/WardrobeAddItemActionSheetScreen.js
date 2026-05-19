@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { Routes } from "../../navigation/routes";
 
-function OptionRow({ icon, title, subtitle, onPress }) {
+function OptionRow({ icon, title, onPress }) {
   const { colors, typography, spacing, radius } = useAppTheme();
 
   return (
@@ -13,7 +13,8 @@ function OptionRow({ icon, title, subtitle, onPress }) {
         style={{
           flexDirection: "row",
           alignItems: "center",
-          padding: spacing.md,
+          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm + 2,
           borderWidth: 1,
           borderColor: colors.border,
           borderRadius: radius.lg,
@@ -34,7 +35,6 @@ function OptionRow({ icon, title, subtitle, onPress }) {
         </View>
         <View style={{ marginLeft: spacing.sm, flex: 1 }}>
           <Text style={[typography.cardTitle, { color: colors.text }]}>{title}</Text>
-          <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 4 }]}>{subtitle}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.secondaryText} />
       </View>
@@ -60,19 +60,16 @@ export default function WardrobeAddItemActionSheetScreen({ navigation }) {
         <OptionRow
           icon="camera-outline"
           title="Сфотографировать вещь"
-          subtitle="Запустить stub-flow с будущей обработкой и распознаванием"
           onPress={() => navigation.replace(Routes.WardrobeAddFromPhoto)}
         />
         <OptionRow
           icon="image-outline"
           title="Загрузить из галереи"
-          subtitle="Сейчас поддержан один файл, архитектура готова к нескольким"
           onPress={() => navigation.replace(Routes.WardrobeAddFromGallery)}
         />
         <OptionRow
           icon="grid-outline"
           title="Выбрать из базового каталога"
-          subtitle="Использовать шаблон вещи и затем уточнить параметры вручную"
           onPress={() => navigation.replace(Routes.WardrobeAddFromCatalog)}
         />
       </View>

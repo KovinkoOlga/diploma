@@ -212,7 +212,7 @@ function fitRect(container, imageWidth, imageHeight) {
   if (imageRatio > containerRatio) {
     const width = container.width;
     const height = width / imageRatio;
-    return { x: 0, y: 0, width, height };
+    return { x: 0, y: (container.height - height) / 2, width, height };
   }
   const height = container.height;
   const width = height * imageRatio;

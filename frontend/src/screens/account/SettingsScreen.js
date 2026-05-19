@@ -1,5 +1,5 @@
 import React from "react";
-import { View } from "react-native";
+import { Linking, Text, View } from "react-native";
 import Screen from "../../components/Screen";
 import ListRow from "../../components/ListRow";
 import SectionHeader from "../../components/SectionHeader";
@@ -8,7 +8,7 @@ import { useAuth } from "../../store/AuthStore";
 import { Routes } from "../../navigation/routes";
 
 export default function SettingsScreen({ navigation }) {
-  const { spacing } = useAppTheme();
+  const { colors, spacing, typography } = useAppTheme();
   const { logout } = useAuth();
 
   return (
@@ -23,6 +23,12 @@ export default function SettingsScreen({ navigation }) {
       </View>
       <ListRow title="Помощь" subtitle="FAQ и обратная связь" />
       <ListRow title="Политика конфиденциальности" />
+      <Text
+        style={[typography.caption, { color: colors.secondaryText, marginTop: spacing.md }]}
+        onPress={() => Linking.openURL("https://www.flaticon.com/")}
+      >
+        Иконки категорий из Flaticon. Ссылки на текущие исходники указаны в assets/wardrobe-icons/CREDITS.md.
+      </Text>
       <ListRow title="Выйти" danger onPress={logout} />
     </Screen>
   );

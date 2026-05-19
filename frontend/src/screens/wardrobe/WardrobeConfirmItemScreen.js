@@ -111,16 +111,9 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
 
   return (
     <Screen scroll padded withKeyboard>
-      <Text style={[typography.h2, { color: colors.text }]}>
-        {isEditMode ? "Редактирование вещи" : "Подтвердите карточку вещи"}
-      </Text>
-      <Text style={[typography.body, { color: colors.secondaryText, marginTop: 8 }]}>
-        {isEditMode
-          ? "Изменения вносятся прямо на этом экране без отдельного шага редактирования."
-          : "Моковые атрибуты уже подставлены. Их можно сразу скорректировать на этом экране и сохранить в шкаф."}
-      </Text>
+   
 
-      <View style={{ marginTop: spacing.lg }}>
+      <View >
         <WardrobeItemForm
           draft={draft}
           onChange={setDraft}

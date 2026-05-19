@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
 import MediaPreview from "./MediaPreview";
+import CategoryIcon from "./CategoryIcon";
 
 function TinyAction({ icon, onPress, color, backgroundColor }) {
   return (
@@ -83,7 +84,7 @@ export default function WardrobeItemCard({
                   color={selected ? colors.text : colors.secondaryText}
                 />
               ) : category?.icon ? (
-                <Ionicons name={category.icon} size={18} color={colors.secondaryText} />
+                <CategoryIcon categoryId={category.id} icon={category.icon} size={18} color={colors.secondaryText} />
               ) : null}
             </View>
             <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 8 }]} numberOfLines={1}>
@@ -152,17 +153,15 @@ export default function WardrobeItemCard({
               backgroundColor: "rgba(255,255,255,0.88)",
             }}
           >
-            <Ionicons
-              name={
-                selectionMode
-                  ? selected
-                    ? "checkmark-circle"
-                    : "ellipse-outline"
-                  : category?.icon ?? "shirt-outline"
-              }
-              size={16}
-              color={selectionMode && !selected ? colors.secondaryText : colors.text}
-            />
+            {selectionMode ? (
+              <Ionicons
+                name={selected ? "checkmark-circle" : "ellipse-outline"}
+                size={16}
+                color={!selected ? colors.secondaryText : colors.text}
+              />
+            ) : (
+              <CategoryIcon categoryId={category?.id} icon={category?.icon} size={16} color={colors.text} />
+            )}
           </View>
         </View>
         <Text style={[typography.cardTitle, { color: colors.text, marginTop: 10 }]} numberOfLines={1}>

@@ -146,6 +146,26 @@ export function getOutfitCountMap(outfits) {
   }, {});
 }
 
+export function formatWardrobeItemCount(count) {
+  const value = Math.abs(Number(count) || 0);
+  const lastTwo = value % 100;
+  const last = value % 10;
+
+  if (lastTwo >= 11 && lastTwo <= 14) {
+    return `${count} вещей`;
+  }
+
+  if (last === 1) {
+    return `${count} вещь`;
+  }
+
+  if (last >= 2 && last <= 4) {
+    return `${count} вещи`;
+  }
+
+  return `${count} вещей`;
+}
+
 export function matchesWardrobeSearch(item, query, categories, catalogs) {
   if (!query?.trim()) return true;
 

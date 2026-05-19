@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Screen, { useScreenContentInsets } from "../../components/Screen";
 import AppHeader from "../../components/AppHeader";
 import SearchBar from "../../components/SearchBar";
@@ -8,6 +7,7 @@ import ActionButton from "../../components/ActionButton";
 import EmptyState from "../../components/EmptyState";
 import FAB from "../../components/FAB";
 import SheetModal from "../../components/SheetModal";
+import CategoryIcon from "../../components/CategoryIcon";
 import WardrobeFiltersSheet from "../../components/WardrobeFiltersSheet";
 import WardrobeSortSheet from "../../components/WardrobeSortSheet";
 import { useAppTheme } from "../../theme/ThemeProvider";
@@ -19,6 +19,7 @@ import {
   getOutfitCountMap,
   getWardrobeFilterOptions,
   matchesWardrobeSearch,
+  formatWardrobeItemCount,
   sortWardrobeItems,
 } from "../../utils/wardrobe";
 
@@ -34,22 +35,22 @@ function CategoryTile({ category, count, onPress }) {
           borderRadius: radius.md,
           backgroundColor: colors.secondaryBackground,
           paddingHorizontal: 10,
-          paddingVertical: 9,
-          height: 138,
+          paddingVertical: 8,
+          height: 120,
           justifyContent: "space-between",
         }}
       >
         <View
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
+            width: 34,
+            height: 34,
+            borderRadius: 17,
             backgroundColor: colors.background,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Ionicons name={category.icon} size={20} color={colors.text} />
+          <CategoryIcon categoryId={category.id} icon={category.icon} size={26} color={colors.text} />
         </View>
         <View>
           <Text
@@ -66,7 +67,7 @@ function CategoryTile({ category, count, onPress }) {
             {category.title}
           </Text>
           <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 1 }]}>
-            {count}
+            {formatWardrobeItemCount(count)}
           </Text>
         </View>
       </View>
@@ -120,12 +121,14 @@ function CatalogSegmentedBar({ catalogs, activeCatalogId, onSelect }) {
         borderColor: colors.border,
         backgroundColor: colors.secondaryBackground,
         padding: 4,
+        overflow: "hidden",
       }}
     >
       <ScrollView
         ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ borderRadius: radius.pill, overflow: "hidden" }}
         contentContainerStyle={{ position: "relative", flexDirection: "row", alignItems: "center", gap: 4 }}
       >
         {ready ? (
@@ -238,7 +241,7 @@ export default function WardrobeHomeScreen({ navigation }) {
 
     return sortWardrobeItems(filtered, sortBy, outfitCountMap);
   }, [catalogItems, catalogs, categories, filters, outfitCountMap, query, sortBy]);
-  const categoryTiles = useMemo(() => [{ id: "all", title: "Все вещи", icon: "apps-outline" }, ...categories], [categories]);
+  const categoryTiles = useMemo(() => [{ id: "all", title: "Все вещи", icon: "all" }, ...categories], [categories]);
   const activeFilterCount = useMemo(
     () =>
       Object.values(filters).reduce((count, value) => {
@@ -283,7 +286,6 @@ export default function WardrobeHomeScreen({ navigation }) {
         header={
           <AppHeader
             title="Шкаф"
-            subtitle="0 вещей"
             right={<ActionButton icon="ellipsis-horizontal" compact variant="ghost" onPress={() => setMenuVisible(true)} />}
           />
         }
@@ -306,7 +308,6 @@ export default function WardrobeHomeScreen({ navigation }) {
       header={
         <AppHeader
           title="Шкаф"
-          subtitle={`${catalogItems.length} вещей в каталоге`}
           right={<ActionButton icon="ellipsis-horizontal" compact variant="ghost" onPress={() => setMenuVisible(true)} />}
         />
       }
@@ -328,7 +329,6 @@ export default function WardrobeHomeScreen({ navigation }) {
         </View>
 
         <View style={{ marginTop: spacing.lg }}>
-          <Text style={[typography.meta, { color: colors.secondaryText, marginBottom: spacing.sm }]}>Каталоги</Text>
           <CatalogSegmentedBar catalogs={catalogs} activeCatalogId={activeCatalogId} onSelect={setActiveCatalogId} />
         </View>
 
@@ -336,7 +336,7 @@ export default function WardrobeHomeScreen({ navigation }) {
           <Text style={[typography.sectionTitle, { color: colors.text }]}>Категории</Text>
           <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 4 }]}>
             {filteredCatalogItems.length
-              ? `Найдено ${filteredCatalogItems.length} вещей в текущем каталоге`
+              ? `Найдено ${formatWardrobeItemCount(filteredCatalogItems.length)} в текущем каталоге`
               : "Измените фильтры или добавьте новую вещь"}
           </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: spacing.sm }}>

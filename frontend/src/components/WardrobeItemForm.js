@@ -56,9 +56,6 @@ export default function WardrobeItemForm({
         }}
       >
         <Text style={[typography.cardTitle, { color: colors.text }]}>Карточка вещи</Text>
-        <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 4 }]}>
-          {draft.recognitionLabel ?? "Мок-атрибуты можно поправить вручную перед сохранением."}
-        </Text>
         <MediaPreview
           source={draft.image}
           resizeMode="contain"

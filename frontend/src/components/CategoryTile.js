@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
+import CategoryIcon from "./CategoryIcon";
 
 export default function CategoryTile({ title, icon, count, tone = "blue", onPress }) {
   const { colors, spacing, typography, radius } = useAppTheme();
@@ -32,7 +32,7 @@ export default function CategoryTile({ title, icon, count, tone = "blue", onPres
               { backgroundColor: colors.bg2 ?? colors.card2, borderColor: colors.border, borderRadius: radius.pill },
             ]}
           >
-            <Ionicons name={icon} size={16} color={colors.mutedText} />
+            <CategoryIcon icon={icon} size={16} color={colors.mutedText} />
           </View>
         </View>
       </View>
