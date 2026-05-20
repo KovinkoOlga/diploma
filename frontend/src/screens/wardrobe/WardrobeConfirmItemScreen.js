@@ -32,14 +32,17 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
 
     setDraft((current) => {
       const normalized = normalizeWardrobeItemDraft(next.draft, current);
-      const optionIds = [next.images?.cutout?.fileId, next.images?.catalog?.fileId].filter(Boolean);
+      const optionIds = [
+        next.images?.cutout?.fileId,
+        next.images?.catalog?.imageUrl ? next.images?.catalog?.fileId : null,
+      ].filter(Boolean);
       const currentSelectionIsValid = current.primaryImageFileId && optionIds.includes(current.primaryImageFileId);
       const selectedPrimaryImageId = currentSelectionIsValid
         ? current.primaryImageFileId
         : normalized.primaryImageFileId;
       let selectedImage = currentSelectionIsValid ? current.image ?? normalized.image : normalized.image;
 
-      if (selectedPrimaryImageId && next.images?.catalog?.fileId === selectedPrimaryImageId) {
+      if (selectedPrimaryImageId && next.images?.catalog?.imageUrl && next.images?.catalog?.fileId === selectedPrimaryImageId) {
         selectedImage = imageSourceForOption(next.images.catalog) ?? selectedImage;
       } else if (selectedPrimaryImageId && next.images?.cutout?.fileId === selectedPrimaryImageId) {
         selectedImage = imageSourceForOption(next.images.cutout) ?? selectedImage;

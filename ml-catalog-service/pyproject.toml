@@ -6,7 +6,6 @@ dependencies = [
   "accelerate>=1.8.1",
   "diffusers>=0.34.0",
   "fastapi>=0.115.0",
-  "huggingface-hub>=0.34.0",
   "pillow>=10.4.0",
   "pydantic-settings>=2.4.0",
   "python-multipart>=0.0.9",
@@ -14,7 +13,13 @@ dependencies = [
   "torch>=2.7.1",
   "torchvision>=0.22.1",
   "transformers>=4.53.1",
+  "tryoffdiff @ git+https://github.com/rizavelioglu/tryoffdiff.git@562af8ea4d4850513ebd7df4f9888e54d3fc6748",
   "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
 ]
 
 [build-system]
@@ -23,3 +28,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

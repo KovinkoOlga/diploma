@@ -45,6 +45,8 @@ export default function WardrobeItemForm({
   };
 
   const catalogBusy = catalogProcessingStatus === "processing" || catalogProcessingStatus === "queued";
+  const catalogFailed = catalogProcessingStatus === "failed";
+  const hasCatalogImage = Boolean(draftImages?.catalog?.fileId && draftImages?.catalog?.imageUrl);
 
   return (
     <View>
@@ -68,7 +70,7 @@ export default function WardrobeItemForm({
             backgroundColor: colors.background,
           }}
         />
-        {draftImages?.cutout || draftImages?.catalog ? (
+        {draftImages?.cutout || hasCatalogImage ? (
           <View style={{ marginTop: spacing.md }}>
             <Text style={[typography.meta, { color: colors.secondaryText }]}>Вариант изображения</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -79,11 +81,11 @@ export default function WardrobeItemForm({
                   onPress={() => onSelectImageOption?.(draftImages.cutout)}
                 />
               ) : null}
-              {draftImages?.catalog ? (
+              {hasCatalogImage ? (
                 <Chip
                   label="Catalog"
-                  selected={draft.primaryImageFileId === draftImages.catalog.fileId}
-                  onPress={() => onSelectImageOption?.(draftImages.catalog)}
+                  selected={draft.primaryImageFileId === draftImages?.catalog?.fileId}
+                  onPress={() => onSelectImageOption?.(draftImages?.catalog)}
                 />
               ) : null}
             </View>
@@ -111,6 +113,9 @@ export default function WardrobeItemForm({
             />
             {catalogBusy ? (
               <Text style={[typography.caption, { color: colors.secondaryText }]}>Генерируем каталожный вариант.</Text>
+            ) : null}
+            {catalogFailed && !catalogErrorMessage ? (
+              <Text style={[typography.caption, { color: colors.danger }]}>Не удалось сгенерировать каталожное изображение.</Text>
             ) : null}
             {catalogErrorMessage ? <Text style={[typography.caption, { color: colors.danger }]}>{catalogErrorMessage}</Text> : null}
           </View>

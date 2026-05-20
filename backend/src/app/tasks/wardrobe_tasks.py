@@ -233,9 +233,13 @@ async def run_enhance_catalog_photo(draft_id: str) -> None:
                 draft.get("ml_result_json"),
                 "catalog_pipeline",
                 {
+                    "provider": result.provider,
                     "model_used": result.model_used,
-                    "fallback_used": result.fallback_used,
-                    "timings_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    "category": result.category,
+                    "generation_status": result.generation_status,
+                    "timings_ms": {
+                        "total": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    },
                 },
             )
             await connection.execute(

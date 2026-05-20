@@ -10,8 +10,15 @@ from app.core.config import get_settings
 class CatalogGenerationResult:
     catalog_image: bytes
     mime_type: str
+    provider: str
     model_used: str
-    fallback_used: bool
+    category: str
+    generation_status: str
+    error_message: str | None
+
+
+class CatalogGenerationError(RuntimeError):
+    pass
 
 
 async def generate_catalog_image(
@@ -37,9 +44,19 @@ async def generate_catalog_image(
         )
     response.raise_for_status()
     payload = response.json()
+
+    generation_status = payload.get("generation_status", "failed")
+    catalog_image_base64 = payload.get("catalog_image")
+    if generation_status != "ready" or not catalog_image_base64:
+        message = payload.get("error_message") or "Catalog generation failed"
+        raise CatalogGenerationError(message)
+
     return CatalogGenerationResult(
-        catalog_image=base64.b64decode(payload["catalog_image"]),
+        catalog_image=base64.b64decode(catalog_image_base64),
         mime_type=payload.get("mime_type", mime_type),
+        provider=payload.get("provider", "unknown"),
         model_used=payload.get("model_used", "unknown"),
-        fallback_used=bool(payload.get("fallback_used")),
+        category=payload.get("category", category_hint or "unknown"),
+        generation_status=generation_status,
+        error_message=payload.get("error_message"),
     )

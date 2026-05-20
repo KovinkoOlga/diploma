@@ -2,8 +2,6 @@
 
 .vscode
 
-tryoffdiff/
-
 # dependencies
 node_modules/
 
@@ -54,4 +52,9 @@ __pycache__/
 /android
 
 # ML
+tryoffdiff/
+models/
+!ml-catalog-service/models/
+ml-catalog-service/models/*
+!ml-catalog-service/models/README.example.md
 *.keras
