@@ -15,6 +15,7 @@ const steps = [
 
 function stepDone(currentStatus, stepIndex) {
   if (currentStatus === "ready") return true;
+  if (currentStatus === "attributes_suggested") return true;
   const currentIndex = steps.findIndex((step) => step.status === currentStatus);
   return currentIndex >= stepIndex;
 }

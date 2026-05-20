@@ -10,7 +10,7 @@ from app.modules.files.service import (
     get_file_bytes,
     transparent_cutout_variants,
 )
-from app.modules.ml_clients.bg_client import remove_background
+from app.modules.ml_clients.vision_client import analyze_item_image
 from app.modules.ml_clients.catalog_client import generate_catalog_image
 from app.tasks.celery_app import celery_app, run_async_in_worker
 
@@ -95,7 +95,7 @@ async def run_prepare_item_photo(draft_id: str) -> None:
 
         started = datetime.now(timezone.utc)
         filename = await _file_name(draft["original_file_id"])
-        result = await remove_background(original_bytes, filename=filename)
+        result = await analyze_item_image(original_bytes, filename=filename)
 
         async with engine.begin() as connection:
             await connection.execute(
@@ -119,24 +119,24 @@ async def run_prepare_item_photo(draft_id: str) -> None:
             )
 
             payload = dict(draft.get("suggested_payload_json") or {})
-            prediction = result.category_prediction or {}
-            if prediction.get("category_id"):
-                payload["categoryId"] = prediction["category_id"]
-            if prediction.get("subcategory"):
-                payload["subcategory"] = prediction["subcategory"]
             payload["primaryImageFileId"] = cutout_file_id
-            payload["recognitionLabel"] = prediction.get("label") or "ML suggestion ready"
+            payload["recognitionLabel"] = "ML analysis ready"
 
             ml_result = _merge_ml_result(
                 draft.get("ml_result_json"),
-                "bg_pipeline",
+                "vision_pipeline",
                 {
-                    "model": result.model,
-                    "category_prediction": prediction,
-                    "timings_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    "predictions": result.predictions,
+                    "timings_ms": result.timings_ms or {"total": int((datetime.now(timezone.utc) - started).total_seconds() * 1000)},
+                    "mime_type": result.mime_type,
                 },
             )
 
+            await connection.execute(
+                update(item_drafts)
+                .where(item_drafts.c.id == draft_id)
+                .values(processing_status="colors_extracting", updated_at=datetime.now(timezone.utc))
+            )
             await connection.execute(
                 update(item_drafts)
                 .where(item_drafts.c.id == draft_id)

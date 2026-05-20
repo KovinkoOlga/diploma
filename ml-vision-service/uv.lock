@@ -314,7 +314,7 @@ wheels = [
 ]
 
 [[package]]
-name = "ml-bg-service"
+name = "ml-vision-service"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

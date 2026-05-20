@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     s3_region: str = "ru-1"
     s3_presigned_expire_seconds: int = 3600
     s3_force_path_style: bool = True
-    ml_bg_service_url: str = "http://ml-bg-service:8001"
+    ml_vision_service_url: str = "http://ml-vision-service:8001"
     ml_catalog_service_url: str = "http://ml-catalog-service:8002"
     ml_request_timeout_seconds: int = 300
 

@@ -30,9 +30,9 @@ services:
       postgres:
         condition: service_healthy
 
-  ml-bg-service:
+  ml-vision-service:
     build:
-      context: ./ml-bg-service
+      context: ./ml-vision-service
     env_file:
       - .env
     environment:
@@ -62,7 +62,7 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      ML_BG_SERVICE_URL: http://ml-bg-service:8001
+      ML_VISION_SERVICE_URL: http://ml-vision-service:8001
       ML_CATALOG_SERVICE_URL: http://ml-catalog-service:8002
     ports:
       - "8000:8000"
@@ -71,7 +71,7 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_started
-      ml-bg-service:
+      ml-vision-service:
         condition: service_started
       # ml-catalog-service:
       #   condition: service_started
@@ -92,14 +92,14 @@ services:
       - .env
     environment:
       REDIS_URL: redis://redis:6379/0
-      ML_BG_SERVICE_URL: http://ml-bg-service:8001
+      ML_VISION_SERVICE_URL: http://ml-vision-service:8001
       ML_CATALOG_SERVICE_URL: http://ml-catalog-service:8002
     depends_on:
       migrations:
         condition: service_completed_successfully
       redis:
         condition: service_started
-      ml-bg-service:
+      ml-vision-service:
         condition: service_started
       # ml-catalog-service:
       #   condition: service_started
