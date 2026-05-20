@@ -2,15 +2,16 @@ import React, { useMemo } from "react";
 import { Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 import {
-  WARDROBE_COLORS,
   WARDROBE_MATERIALS,
   WARDROBE_SEASONS,
   WARDROBE_SIZES,
   WARDROBE_STATUSES,
   WARDROBE_STYLES,
 } from "../utils/wardrobe";
+import { buildColorOptionMap, toggleColorSelection } from "../utils/wardrobeColors";
 import ActionButton from "./ActionButton";
 import Chip from "./Chip";
+import CollapsibleColorSelector from "./CollapsibleColorSelector";
 import Input from "./Input";
 import MediaPreview from "./MediaPreview";
 import SectionHeader from "./SectionHeader";
@@ -20,6 +21,7 @@ export default function WardrobeItemForm({
   onChange,
   catalogs,
   categories,
+  colorOptions,
   draftImages,
   catalogProcessingStatus,
   catalogErrorMessage,
@@ -33,11 +35,22 @@ export default function WardrobeItemForm({
     () => categories.find((category) => category.id === draft.categoryId) ?? categories[0],
     [categories, draft.categoryId]
   );
+  const colorOptionsById = useMemo(() => buildColorOptionMap(colorOptions), [colorOptions]);
 
   const toggleArrayValue = (field, value) => {
     const current = draft[field] ?? [];
     const next = current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
     onChange({ ...draft, [field]: next });
+  };
+
+  const toggleColor = (colorId) => {
+    const nextColorIds = toggleColorSelection(draft.colorIds ?? [], colorId, colorOptionsById);
+    onChange({
+      ...draft,
+      colorIds: nextColorIds,
+      colorDetails: nextColorIds.map((id) => colorOptionsById[id]).filter(Boolean),
+      colorPrediction: null,
+    });
   };
 
   const setField = (field, value) => {
@@ -178,15 +191,25 @@ export default function WardrobeItemForm({
       <View style={{ marginTop: spacing.lg }}>
         <SectionHeader title="Атрибуты" />
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.sm }]}>Цвет</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {WARDROBE_COLORS.map((color) => (
-            <Chip
-              key={color}
-              label={color}
-              selected={(draft.colors ?? []).includes(color)}
-              onPress={() => toggleArrayValue("colors", color)}
-            />
-          ))}
+        <View style={{ marginTop: spacing.xs }}>
+          <CollapsibleColorSelector
+            title="Цвет"
+            emptyLabel="Не выбрано"
+            colorOptions={colorOptions}
+            selectedColorIds={draft.colorIds ?? []}
+            selectedColorDetails={draft.colorDetails ?? []}
+            optionDotSize={30}
+            summaryDotSize={38}
+            onToggleColor={toggleColor}
+            onClear={() =>
+              onChange({
+                ...draft,
+                colorIds: [],
+                colorDetails: [],
+                colorPrediction: null,
+              })
+            }
+          />
         </View>
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Сезон</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>

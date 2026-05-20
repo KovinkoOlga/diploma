@@ -14,7 +14,7 @@ function imageSourceForOption(option) {
 
 export default function WardrobeConfirmItemScreen({ navigation, route }) {
   const { typography, colors, spacing } = useAppTheme();
-  const { catalogs, categories, items, actions } = useWardrobe();
+  const { catalogs, categories, colorOptions, items, actions } = useWardrobe();
   const existingItem = useMemo(() => items.find((item) => item.id === route.params?.itemId), [items, route.params?.itemId]);
   const isEditMode = Boolean(existingItem);
   const draftId = route.params?.draftId;
@@ -23,7 +23,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
   const [enhancing, setEnhancing] = useState(false);
   const [draftState, setDraftState] = useState(null);
   const [draft, setDraft] = useState(
-    normalizeWardrobeItemDraft(route.params?.draft ?? createDraftFromItem(existingItem ?? {}), existingItem)
+    normalizeWardrobeItemDraft(route.params?.draft ?? createDraftFromItem(existingItem ?? {}), existingItem, colorOptions)
   );
 
   const syncDraftState = (next) => {
@@ -31,7 +31,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     if (!next?.draft) return;
 
     setDraft((current) => {
-      const normalized = normalizeWardrobeItemDraft(next.draft, current);
+      const normalized = normalizeWardrobeItemDraft(next.draft, current, colorOptions);
       const optionIds = [next.images?.cutout?.fileId, next.images?.catalog?.fileId].filter(Boolean);
       const currentSelectionIsValid = current.primaryImageFileId && optionIds.includes(current.primaryImageFileId);
       const selectedPrimaryImageId = currentSelectionIsValid
@@ -72,7 +72,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     return () => {
       alive = false;
     };
-  }, [actions, draftId, route.params?.maskEditedAt]);
+  }, [actions, colorOptions, draftId, route.params?.maskEditedAt]);
 
   const pollCatalogStatus = async () => {
     if (!draftId) return;
@@ -119,6 +119,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
           onChange={setDraft}
           catalogs={catalogs}
           categories={categories}
+          colorOptions={colorOptions}
           draftImages={draftState?.images}
           catalogProcessingStatus={draftState?.catalogProcessingStatus}
           catalogErrorMessage={draftState?.catalogErrorMessage}

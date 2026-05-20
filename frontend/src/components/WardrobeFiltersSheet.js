@@ -2,11 +2,13 @@ import React from "react";
 import { Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 import { createEmptyWardrobeFilters } from "../utils/wardrobe";
+import { resolveColorDetails, toggleFilterColorSelection } from "../utils/wardrobeColors";
 import ActionButton from "./ActionButton";
 import Chip from "./Chip";
+import CollapsibleColorSelector from "./CollapsibleColorSelector";
 import SheetModal from "./SheetModal";
 
-function FilterSection({ title, options, value, onToggle, single = false }) {
+function FilterSection({ title, options, value, onToggle, single = false, renderLeftSlot }) {
   const { colors, typography, spacing } = useAppTheme();
 
   if (!options?.length) return null;
@@ -17,10 +19,18 @@ function FilterSection({ title, options, value, onToggle, single = false }) {
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {options.map((option) => {
           const optionValue = typeof option === "string" ? option : option.id;
-          const label = typeof option === "string" ? option : option.title;
+          const label = typeof option === "string" ? option : option.title ?? option.name;
           const selected = single ? value === optionValue : (value ?? []).includes(optionValue);
 
-          return <Chip key={optionValue} label={label} selected={selected} onPress={() => onToggle(optionValue)} />;
+          return (
+            <Chip
+              key={optionValue}
+              label={label}
+              selected={selected}
+              onPress={() => onToggle(optionValue)}
+              leftSlot={renderLeftSlot ? renderLeftSlot(option) : null}
+            />
+          );
         })}
       </View>
     </View>
@@ -47,6 +57,11 @@ export default function WardrobeFiltersSheet({
       : [...current, nextValue];
 
     onChangeFilters({ ...filters, [field]: next });
+  };
+
+  const toggleColor = (colorId) => {
+    const next = toggleFilterColorSelection(filters.color ?? [], colorId);
+    onChangeFilters({ ...filters, color: next });
   };
 
   return (
@@ -90,7 +105,20 @@ export default function WardrobeFiltersSheet({
         value={filters.subcategory}
         onToggle={(value) => toggleArrayValue("subcategory", value)}
       />
-      <FilterSection title="Цвет" options={options.colors} value={filters.color} onToggle={(value) => toggleArrayValue("color", value)} />
+      <View style={{ marginBottom: spacing.lg }}>
+        <CollapsibleColorSelector
+          title="Цвет"
+          emptyLabel="Любой цвет"
+          colorOptions={options.colors}
+          selectedColorIds={filters.color ?? []}
+          selectedColorDetails={resolveColorDetails(filters.color ?? [], options.colors)}
+          optionDotSize={30}
+          summaryDotSize={32}
+          summaryMode="first"
+          onToggleColor={toggleColor}
+          onClear={() => onChangeFilters({ ...filters, color: [] })}
+        />
+      </View>
       <FilterSection
         title="Сезон"
         options={options.seasons}

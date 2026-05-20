@@ -4,6 +4,7 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     MetaData,
@@ -110,6 +111,8 @@ colors = Table(
     Column("name", String(80), nullable=False, unique=True),
     Column("parent_color_id", String(48), ForeignKey("colors.id"), nullable=True),
     Column("hex", String(16), nullable=True),
+    Column("kind", String(24), nullable=False, default="solid"),
+    Column("sort_order", Integer, nullable=False, default=0),
 )
 
 brands = Table(
@@ -185,6 +188,10 @@ item_colors = Table(
     Column("id", String(48), primary_key=True),
     Column("item_id", String(48), ForeignKey("wardrobe_items.id", ondelete="CASCADE"), nullable=False),
     Column("color_id", String(48), ForeignKey("colors.id"), nullable=False),
+    Column("position", Integer, nullable=False, default=0),
+    Column("coverage_percent", Float, nullable=True),
+    Column("source", String(24), nullable=True),
+    Column("confidence", Float, nullable=True),
     UniqueConstraint("item_id", "color_id", name="uq_item_colors_item_color"),
 )
 
@@ -250,7 +257,7 @@ wardrobe_item_templates = Table(
     Column("brand", String(120), nullable=False, default=""),
     Column("size_name", String(40), nullable=False, default=""),
     Column("material", String(80), nullable=False, default=""),
-    Column("colors_json", JSON, nullable=False, default=list),
+    Column("color_ids_json", JSON, nullable=False, default=list),
     Column("seasons_json", JSON, nullable=False, default=list),
     Column("styles_json", JSON, nullable=False, default=list),
     Column("sort_order", Integer, nullable=False, default=0),

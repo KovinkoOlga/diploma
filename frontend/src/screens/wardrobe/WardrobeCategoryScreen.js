@@ -3,7 +3,7 @@ import WardrobeCollectionView from "../../components/WardrobeCollectionView";
 import { useWardrobe } from "../../store/WardrobeStore";
 
 export default function WardrobeCategoryScreen({ navigation, route }) {
-  const { items, catalogs, categories, outfits, actions } = useWardrobe();
+  const { items, catalogs, categories, colorOptions, outfits, actions } = useWardrobe();
   const category = categories.find((entry) => entry.id === route.params?.categoryId) ?? categories[0];
   const catalog = catalogs.find((entry) => entry.id === route.params?.catalogId) ?? catalogs[0];
 
@@ -17,6 +17,7 @@ export default function WardrobeCategoryScreen({ navigation, route }) {
       items={items}
       catalogs={catalogs}
       categories={categories}
+      colorOptions={colorOptions}
       outfits={outfits}
       actions={actions}
       title={category?.title ?? "Категория"}

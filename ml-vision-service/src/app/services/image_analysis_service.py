@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from time import perf_counter
 
-from app.schemas.analysis import AnalysisTimingsMs, AnalyzeItemImageResponse, ItemImagePredictions
+from app.schemas.analysis import AnalysisTimingsMs, AnalyzeItemImageResponse, ColorPaletteEntry, ItemImagePredictions
 from app.services.background_removal_service import BackgroundRemovalService
 from app.services.category_prediction_service import CategoryPredictionService
 from app.services.color_prediction_service import ColorPredictionService
@@ -21,7 +21,12 @@ class ImageAnalysisService:
         self._category_prediction_service = category_prediction_service
         self._color_prediction_service = color_prediction_service
 
-    def analyze_item_image(self, image_bytes: bytes) -> AnalyzeItemImageResponse:
+    def analyze_item_image(
+        self,
+        image_bytes: bytes,
+        *,
+        color_palette: list[ColorPaletteEntry] | None = None,
+    ) -> AnalyzeItemImageResponse:
         total_started = perf_counter()
 
         background_started = perf_counter()
@@ -33,7 +38,11 @@ class ImageAnalysisService:
         category_ms = int((perf_counter() - category_started) * 1000)
 
         colors_started = perf_counter()
-        colors_prediction = self._color_prediction_service.predict(image_bytes)
+        colors_prediction = self._color_prediction_service.predict(
+            image_bytes=image_bytes,
+            mask_image_bytes=background_result.mask_image,
+            palette=[entry.model_dump() for entry in (color_palette or [])],
+        )
         colors_ms = int((perf_counter() - colors_started) * 1000)
 
         total_ms = int((perf_counter() - total_started) * 1000)

@@ -252,7 +252,7 @@ export default function OutfitEditorScreen({ navigation, route }) {
                     {item.title}
                   </Text>
                   <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 4 }]} numberOfLines={1}>
-                    {item.colors?.[0] ?? "цвет"}
+                    {[item.subcategory, item.brand].filter(Boolean).join(" · ") || "Вещь"}
                   </Text>
                   <ActionButton
                     label={selected ? "Убрать" : "Добавить"}

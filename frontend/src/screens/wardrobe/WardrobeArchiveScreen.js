@@ -3,7 +3,7 @@ import WardrobeCollectionView from "../../components/WardrobeCollectionView";
 import { useWardrobe } from "../../store/WardrobeStore";
 
 export default function WardrobeArchiveScreen({ navigation }) {
-  const { items, catalogs, categories, outfits, actions } = useWardrobe();
+  const { items, catalogs, categories, colorOptions, outfits, actions } = useWardrobe();
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: "Архив" });
@@ -15,6 +15,7 @@ export default function WardrobeArchiveScreen({ navigation }) {
       items={items}
       catalogs={catalogs}
       categories={categories}
+      colorOptions={colorOptions}
       outfits={outfits}
       actions={actions}
       title="Архив"

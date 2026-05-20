@@ -22,6 +22,7 @@ export function WardrobeProvider({ children }) {
   const [items, setItems] = useState([]);
   const [catalogs, setCatalogs] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [colorOptions, setColorOptions] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [outfits, setOutfits] = useState([]);
   const [outfitDraftSessions, setOutfitDraftSessions] = useState({});
@@ -34,6 +35,7 @@ export function WardrobeProvider({ children }) {
     const bootstrap = await wardrobeApi.fetchBootstrap();
     setCatalogs(bootstrap.catalogs ?? []);
     setCategories(bootstrap.categories ?? []);
+    setColorOptions(bootstrap.colorOptions ?? []);
     setTemplates(bootstrap.templates ?? []);
     return bootstrap;
   }, []);
@@ -255,6 +257,7 @@ export function WardrobeProvider({ children }) {
       items,
       catalogs,
       categories,
+      colorOptions,
       templates,
       outfits,
       outfitDraftSessions,
@@ -264,7 +267,7 @@ export function WardrobeProvider({ children }) {
       error,
       actions,
     }),
-    [actions, catalogs, categories, error, feedPosts, homeContent, items, loading, outfitDraftSessions, outfits, templates]
+    [actions, catalogs, categories, colorOptions, error, feedPosts, homeContent, items, loading, outfitDraftSessions, outfits, templates]
   );
 
   return <WardrobeContext.Provider value={value}>{children}</WardrobeContext.Provider>;

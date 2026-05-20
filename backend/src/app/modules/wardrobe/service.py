@@ -2,6 +2,7 @@ import base64
 import json
 from datetime import datetime, timezone
 from io import BytesIO
+from typing import Any
 
 from sqlalchemy import delete, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -32,10 +33,15 @@ from app.modules.files.service import (
     new_id,
     transparent_cutout_variants,
 )
+from app.modules.wardrobe.colors import (
+    normalize_color_ids,
+    validate_color_selection,
+)
 from app.modules.wardrobe.schemas import (
     BootstrapResponse,
     CatalogResponse,
     CategoryResponse,
+    ColorResponse,
     DraftImageAsset,
     DraftImagesResponse,
     DraftResponse,
@@ -66,6 +72,94 @@ def _csv(values: list[str] | None) -> list[str]:
     return [value for value in (values or []) if value]
 
 
+def _color_response(row: dict[str, Any]) -> ColorResponse:
+    return ColorResponse(
+        id=row["id"],
+        name=row["name"],
+        parentColorId=row.get("parent_color_id"),
+        parentName=row.get("parent_name"),
+        hex=row.get("hex"),
+        kind=row["kind"],
+        sortOrder=row["sort_order"],
+    )
+
+
+def _color_row_dict(option: ColorResponse) -> dict[str, Any]:
+    return {
+        "id": option.id,
+        "name": option.name,
+        "parent_color_id": option.parentColorId,
+        "parent_name": option.parentName,
+        "hex": option.hex,
+        "kind": option.kind,
+        "sort_order": option.sortOrder,
+    }
+
+
+async def get_color_options(connection: AsyncConnection) -> list[ColorResponse]:
+    parent_colors = colors.alias("parent_colors")
+    rows = (
+        await connection.execute(
+            select(
+                colors.c.id,
+                colors.c.name,
+                colors.c.parent_color_id,
+                parent_colors.c.name.label("parent_name"),
+                colors.c.hex,
+                colors.c.kind,
+                colors.c.sort_order,
+            )
+            .select_from(colors.outerjoin(parent_colors, colors.c.parent_color_id == parent_colors.c.id))
+            .order_by(colors.c.sort_order, colors.c.name)
+        )
+    ).mappings().all()
+    return [_color_response(dict(row)) for row in rows]
+
+
+async def get_selectable_color_palette(connection: AsyncConnection) -> list[dict[str, Any]]:
+    options = await get_color_options(connection)
+    return [
+        _color_row_dict(option)
+        for option in options
+        if option.parentColorId is not None
+    ]
+
+
+async def _color_rows_by_id(connection: AsyncConnection) -> dict[str, dict[str, Any]]:
+    return {option.id: _color_row_dict(option) for option in await get_color_options(connection)}
+
+
+async def _season_ids_by_names(connection: AsyncConnection, names: list[str]) -> list[str]:
+    if not names:
+        return []
+    rows = (await connection.execute(select(seasons.c.id, seasons.c.name).where(seasons.c.name.in_(names)))).mappings().all()
+    return [row["id"] for row in rows]
+
+
+def _build_item_color_rows(color_ids: list[str], color_prediction: dict[str, Any] | None) -> list[dict[str, Any]]:
+    prediction_by_id = {
+        str(entry.get("id")): entry
+        for entry in ((color_prediction or {}).get("colors") or [])
+        if isinstance(entry, dict) and entry.get("id")
+    }
+    source = "ml" if color_prediction else "manual"
+    rows: list[dict[str, Any]] = []
+    for position, color_id in enumerate(color_ids):
+        predicted = prediction_by_id.get(color_id) or {}
+        rows.append(
+            {
+                "id": new_id("item_color"),
+                "item_id": None,
+                "color_id": color_id,
+                "position": position,
+                "coverage_percent": predicted.get("coverage_percent"),
+                "source": source,
+                "confidence": predicted.get("confidence") if source == "ml" else None,
+            }
+        )
+    return rows
+
+
 async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapResponse:
     catalog_rows = (
         await connection.execute(
@@ -83,7 +177,7 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
         subcategories_by_category.setdefault(row["category_id"], []).append(row["name"])
 
     status_rows = (await connection.execute(select(item_statuses).order_by(item_statuses.c.sort_order))).mappings().all()
-    color_rows = (await connection.execute(select(colors.c.name).order_by(colors.c.name))).scalars().all()
+    color_options = await get_color_options(connection)
     season_rows = (await connection.execute(select(seasons.c.name).order_by(seasons.c.sort_order))).scalars().all()
     size_rows = (await connection.execute(select(sizes.c.name).order_by(sizes.c.id))).scalars().all()
     style_rows = (
@@ -112,7 +206,7 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
             )
             for row in category_rows
         ],
-        colors=list(color_rows),
+        colorOptions=color_options,
         seasons=list(season_rows),
         sizes=list(size_rows),
         styles=list(style_rows),
@@ -126,7 +220,7 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
                 brand=row["brand"] or "",
                 size=row["size_name"] or "",
                 material=row["material"] or "",
-                colors=row["colors_json"] or [],
+                colorIds=row["color_ids_json"] or [],
                 seasons=row["seasons_json"] or [],
                 styles=row["styles_json"] or [],
             )
@@ -242,43 +336,66 @@ async def _style_ids_by_names(connection: AsyncConnection, names: list[str]) -> 
 async def _replace_item_links(
     connection: AsyncConnection,
     item_id: str,
-    color_names: list[str],
+    color_ids: list[str] | None,
     season_names: list[str],
     style_names: list[str],
+    *,
+    replace_colors: bool = True,
+    replace_seasons: bool = True,
+    replace_styles: bool = True,
+    color_prediction: dict[str, Any] | None = None,
 ) -> None:
-    await connection.execute(delete(item_colors).where(item_colors.c.item_id == item_id))
-    await connection.execute(delete(item_seasons).where(item_seasons.c.item_id == item_id))
-    await connection.execute(delete(item_styles).where(item_styles.c.item_id == item_id))
+    if replace_colors:
+        color_rows_by_id = await _color_rows_by_id(connection)
+        validated_color_ids = validate_color_selection(color_ids or [], color_rows_by_id)
+        await connection.execute(delete(item_colors).where(item_colors.c.item_id == item_id))
+        if validated_color_ids:
+            color_rows = _build_item_color_rows(validated_color_ids, color_prediction)
+            for row in color_rows:
+                row["item_id"] = item_id
+            await connection.execute(insert(item_colors), color_rows)
 
-    color_ids = await _ids_by_names(connection, colors, color_names)
-    season_ids = await _ids_by_names(connection, seasons, season_names)
-    style_ids = await _style_ids_by_names(connection, style_names)
+    if replace_seasons:
+        await connection.execute(delete(item_seasons).where(item_seasons.c.item_id == item_id))
+    if replace_styles:
+        await connection.execute(delete(item_styles).where(item_styles.c.item_id == item_id))
 
-    if color_ids:
-        await connection.execute(
-            insert(item_colors),
-            [{"id": new_id("item_color"), "item_id": item_id, "color_id": color_id} for color_id in color_ids],
-        )
-    if season_ids:
+    season_ids = await _season_ids_by_names(connection, season_names) if replace_seasons else []
+    style_ids = await _style_ids_by_names(connection, style_names) if replace_styles else []
+    if replace_seasons and season_ids:
         await connection.execute(
             insert(item_seasons),
             [{"id": new_id("item_season"), "item_id": item_id, "season_id": season_id} for season_id in season_ids],
         )
-    if style_ids:
+    if replace_styles and style_ids:
         await connection.execute(
             insert(item_styles),
             [{"id": new_id("item_style"), "item_id": item_id, "style_id": style_id} for style_id in style_ids],
         )
 
 
-async def _item_link_names(connection: AsyncConnection, item_id: str) -> tuple[list[str], list[str], list[str]]:
+async def _item_links(connection: AsyncConnection, item_id: str) -> tuple[list[ColorResponse], list[str], list[str]]:
+    parent_colors = colors.alias("parent_colors")
     color_rows = (
         await connection.execute(
-            select(colors.c.name)
-            .select_from(item_colors.join(colors, item_colors.c.color_id == colors.c.id))
+            select(
+                colors.c.id,
+                colors.c.name,
+                colors.c.parent_color_id,
+                parent_colors.c.name.label("parent_name"),
+                colors.c.hex,
+                colors.c.kind,
+                colors.c.sort_order,
+            )
+            .select_from(
+                item_colors.join(colors, item_colors.c.color_id == colors.c.id).outerjoin(
+                    parent_colors, colors.c.parent_color_id == parent_colors.c.id
+                )
+            )
             .where(item_colors.c.item_id == item_id)
+            .order_by(item_colors.c.position, colors.c.sort_order, colors.c.name)
         )
-    ).scalars().all()
+    ).mappings().all()
     season_rows = (
         await connection.execute(
             select(seasons.c.name)
@@ -293,11 +410,11 @@ async def _item_link_names(connection: AsyncConnection, item_id: str) -> tuple[l
             .where(item_styles.c.item_id == item_id)
         )
     ).scalars().all()
-    return list(color_rows), list(season_rows), list(style_rows)
+    return [_color_response(dict(row)) for row in color_rows], list(season_rows), list(style_rows)
 
 
 async def serialize_item(connection: AsyncConnection, row: dict) -> ItemResponse:
-    color_names, season_names, style_names = await _item_link_names(connection, row["id"])
+    color_details, season_names, style_names = await _item_links(connection, row["id"])
     outfit_count = (
         await connection.execute(select(func.count()).select_from(outfit_items).where(outfit_items.c.item_id == row["id"]))
     ).scalar_one()
@@ -312,8 +429,8 @@ async def serialize_item(connection: AsyncConnection, row: dict) -> ItemResponse
         catalogId=row["catalog_id"],
         categoryId=row["category_id"],
         subcategory=row.get("subcategory_name") or "",
-        colors=color_names,
-        color=color_names[0] if color_names else "",
+        colorIds=[color.id for color in color_details],
+        colorDetails=color_details,
         brand=row.get("brand_name") or "",
         size=row.get("size_name") or "",
         material=material,
@@ -353,12 +470,33 @@ def _base_item_select():
 async def list_items(connection: AsyncConnection, user_id: str, params: dict[str, list[str] | str | bool]) -> list[ItemResponse]:
     rows = (await connection.execute(_base_item_select().where(wardrobe_items.c.user_id == user_id))).mappings().all()
     items = [await serialize_item(connection, dict(row)) for row in rows]
+    color_options = await get_color_options(connection)
+    color_by_id = {option.id: option for option in color_options}
+    descendant_ids_by_parent: dict[str, set[str]] = {}
+    for option in color_options:
+        if option.parentColorId:
+            descendant_ids_by_parent.setdefault(option.parentColorId, set()).add(option.id)
 
     def has_any(actual, expected):
         if not expected:
             return True
         actual_values = actual if isinstance(actual, list) else [actual]
         return any(value in actual_values for value in expected)
+
+    def has_color_match(item: ItemResponse, expected: list[str]) -> bool:
+        if not expected:
+            return True
+        actual_ids = set(item.colorIds)
+        for color_id in expected:
+            option = color_by_id.get(color_id)
+            if option is None:
+                continue
+            if option.parentColorId is None:
+                if actual_ids & descendant_ids_by_parent.get(color_id, set()):
+                    return True
+            elif color_id in actual_ids:
+                return True
+        return False
 
     q = normalize_name(str(params.get("q") or ""))
     filtered: list[ItemResponse] = []
@@ -371,7 +509,7 @@ async def list_items(connection: AsyncConnection, user_id: str, params: dict[str
             continue
         if not has_any(item.subcategory, params.get("subcategory") or []):
             continue
-        if not has_any(item.colors, params.get("color") or []):
+        if not has_color_match(item, params.get("color") or []):
             continue
         if not has_any(item.seasons, params.get("season") or []):
             continue
@@ -400,7 +538,8 @@ async def list_items(connection: AsyncConnection, user_id: str, params: dict[str
                         item.size,
                         item.material,
                         item.status,
-                        *item.colors,
+                        *[color.name for color in item.colorDetails],
+                        *[color.parentName for color in item.colorDetails if color.parentName],
                         *item.seasons,
                         *item.styles,
                     ]
@@ -442,7 +581,14 @@ async def create_item(connection: AsyncConnection, user_id: str, payload: ItemPa
         "attributes_json": {"material": payload.material.strip()},
     }
     await connection.execute(insert(wardrobe_items).values(values))
-    await _replace_item_links(connection, item_id, _csv(payload.colors), _csv(payload.seasons), _csv(payload.styles))
+    await _replace_item_links(
+        connection,
+        item_id,
+        normalize_color_ids(payload.colorIds),
+        _csv(payload.seasons),
+        _csv(payload.styles),
+        color_prediction=payload.colorPrediction,
+    )
     return await get_item(connection, user_id, item_id)
 
 
@@ -453,7 +599,7 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
         catalogId=payload.catalogId if payload.catalogId is not None else current.catalogId,
         categoryId=payload.categoryId if payload.categoryId is not None else current.categoryId,
         subcategory=payload.subcategory if payload.subcategory is not None else current.subcategory,
-        colors=payload.colors if payload.colors is not None else current.colors,
+        colorIds=payload.colorIds if payload.colorIds is not None else current.colorIds,
         brand=payload.brand if payload.brand is not None else current.brand,
         size=payload.size if payload.size is not None else current.size,
         material=payload.material if payload.material is not None else current.material,
@@ -462,6 +608,7 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
         status=payload.status if payload.status is not None else current.status,
         notes=payload.notes if payload.notes is not None else current.notes,
         primaryImageFileId=payload.primaryImageFileId if payload.primaryImageFileId is not None else current.primaryImageFileId,
+        colorPrediction=payload.colorPrediction,
     )
     await connection.execute(
         update(wardrobe_items)
@@ -480,7 +627,17 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
             updated_at=datetime.now(timezone.utc),
         )
     )
-    await _replace_item_links(connection, item_id, _csv(merged.colors), _csv(merged.seasons), _csv(merged.styles))
+    await _replace_item_links(
+        connection,
+        item_id,
+        normalize_color_ids(merged.colorIds),
+        _csv(merged.seasons),
+        _csv(merged.styles),
+        replace_colors=payload.colorIds is not None,
+        replace_seasons=payload.seasons is not None,
+        replace_styles=payload.styles is not None,
+        color_prediction=payload.colorPrediction,
+    )
     return await get_item(connection, user_id, item_id)
 
 
@@ -494,7 +651,7 @@ def _default_draft_payload(template: dict, source_type: str, catalog_id: str, fi
         "catalogId": catalog_id,
         "categoryId": template["category_id"],
         "subcategory": template["subcategory_name"],
-        "colors": template["colors_json"] or [],
+        "colorIds": template["color_ids_json"] or [],
         "brand": template["brand"] or "",
         "size": template["size_name"] or "",
         "material": template["material"] or "",
@@ -875,6 +1032,8 @@ async def confirm_draft(connection: AsyncConnection, user_id: str, draft_id: str
         for key, value in override.model_dump(exclude_unset=True).items():
             if value is not None:
                 data[key] = value
+        if override.colorIds is not None and override.colorPrediction is None:
+            data.pop("colorPrediction", None)
     allowed_primary_ids = {row.get("original_file_id"), row.get("processed_file_id"), row.get("catalog_file_id")}
     selected_primary_id = data.get("primaryImageFileId")
     if selected_primary_id and selected_primary_id not in allowed_primary_ids:

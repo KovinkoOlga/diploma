@@ -5,6 +5,7 @@ import { useAppTheme } from "../theme/ThemeProvider";
 
 export default function ItemCard({ item, onPress, variant = "row" }) {
   const { colors, spacing, typography, radius } = useAppTheme();
+  const metaText = [item.subcategory, item.brand].filter(Boolean).join(" · ");
 
   if (variant === "grid") {
     return (
@@ -16,8 +17,7 @@ export default function ItemCard({ item, onPress, variant = "row" }) {
               {item.title}
             </Text>
             <Text style={[typography.caption, { marginTop: 2, color: colors.mutedText }]} numberOfLines={1}>
-              {item.brand ? `${item.brand} · ` : ""}
-              {item.colors?.[0] ?? "—"}
+              {metaText || "—"}
             </Text>
           </View>
         </View>
@@ -33,8 +33,7 @@ export default function ItemCard({ item, onPress, variant = "row" }) {
             {item.title}
           </Text>
           <Text style={[typography.caption, { marginTop: 2, color: colors.mutedText }]} numberOfLines={1}>
-            {item.brand ? `${item.brand} · ` : ""}
-            {item.colors?.[0] ?? "—"} · {item.season?.join(", ") ?? "—"}
+            {metaText || "—"} · {item.season?.join(", ") ?? "—"}
           </Text>
           {(item.tags ?? []).length ? (
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: spacing.xs }}>

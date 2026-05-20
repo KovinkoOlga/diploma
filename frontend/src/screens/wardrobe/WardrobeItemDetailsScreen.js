@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useMemo, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import Screen from "../../components/Screen";
 import ActionButton from "../../components/ActionButton";
+import ColorDot from "../../components/ColorDot";
 import EmptyState from "../../components/EmptyState";
 import MediaPreview from "../../components/MediaPreview";
 import SectionHeader from "../../components/SectionHeader";
@@ -11,6 +12,7 @@ import { useAppTheme } from "../../theme/ThemeProvider";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
 import { getStatusMeta } from "../../utils/wardrobe";
+import { formatColorSelectionLabel } from "../../utils/wardrobeColors";
 
 function InfoTable({ rows }) {
   const { colors, typography, spacing, radius } = useAppTheme();
@@ -50,7 +52,11 @@ function InfoTable({ rows }) {
             <Text style={[typography.meta, { color: colors.text, fontWeight: "600", fontSize: 12.5 }]}>{row.label}</Text>
           </View>
           <View style={{ flex: 1, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs + 2, justifyContent: "center" }}>
-            <Text style={[typography.body, { color: colors.text, fontSize: 14, lineHeight: 18 }]}>{row.value || "Не указано"}</Text>
+            {row.renderValue ? (
+              row.renderValue()
+            ) : (
+              <Text style={[typography.body, { color: colors.text, fontSize: 14, lineHeight: 18 }]}>{row.value || "Не указано"}</Text>
+            )}
           </View>
         </View>
       ))}
@@ -98,11 +104,23 @@ export default function WardrobeItemDetailsScreen({ navigation, route }) {
     ]);
   };
 
+  const colorNames = formatColorSelectionLabel(item.colorDetails ?? [], "Не указано");
   const infoRows = [
     { label: "Каталог", value: catalog?.title },
     { label: "Категория", value: category?.title },
     { label: "Подкатегория", value: item.subcategory },
-    { label: "Цвет", value: (item.colors ?? []).join(", ") },
+    {
+      label: "Цвет",
+      renderValue: () =>
+        item.colorDetails?.length ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <ColorDot colors={item.colorDetails} size={28} />
+            <Text style={[typography.body, { color: colors.text, fontSize: 14, lineHeight: 18 }]}>{colorNames}</Text>
+          </View>
+        ) : (
+          <Text style={[typography.body, { color: colors.text, fontSize: 14, lineHeight: 18 }]}>Не указано</Text>
+        ),
+    },
     { label: "Бренд", value: item.brand },
     { label: "Размер", value: item.size },
     { label: "Материал", value: item.material },

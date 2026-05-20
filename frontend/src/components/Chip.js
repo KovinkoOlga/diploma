@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 
-export default function Chip({ label, selected = false, compact = false, onPress }) {
+export default function Chip({ label, selected = false, compact = false, onPress, leftSlot = null }) {
   const { colors, typography, radius, spacing } = useAppTheme();
 
   return (
@@ -19,6 +19,7 @@ export default function Chip({ label, selected = false, compact = false, onPress
           },
         ]}
       >
+        {leftSlot ? <View style={{ marginRight: spacing.xs }}>{leftSlot}</View> : null}
         <Text
           style={[
             compact ? typography.meta : typography.caption,
@@ -38,6 +39,7 @@ const styles = StyleSheet.create({
   chip: {
     justifyContent: "center",
     alignItems: "center",
+    flexDirection: "row",
     borderWidth: StyleSheet.hairlineWidth,
   },
 });

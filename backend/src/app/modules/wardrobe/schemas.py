@@ -23,14 +23,24 @@ class StatusResponse(BaseModel):
     title: str
 
 
+class ColorResponse(BaseModel):
+    id: str
+    name: str
+    parentColorId: str | None = None
+    parentName: str | None = None
+    hex: str | None = None
+    kind: str
+    sortOrder: int
+
+
 class TemplateResponse(BaseModel):
     id: str
     title: str
     categoryId: str
     subcategory: str
-    colors: list[str]
-    styles: list[str]
-    seasons: list[str]
+    colorIds: list[str] = Field(default_factory=list)
+    styles: list[str] = Field(default_factory=list)
+    seasons: list[str] = Field(default_factory=list)
     brand: str = ""
     material: str = ""
     size: str = ""
@@ -40,7 +50,7 @@ class TemplateResponse(BaseModel):
 class BootstrapResponse(BaseModel):
     catalogs: list[CatalogResponse]
     categories: list[CategoryResponse]
-    colors: list[str]
+    colorOptions: list[ColorResponse]
     seasons: list[str]
     sizes: list[str]
     styles: list[str]
@@ -53,7 +63,7 @@ class ItemPayload(BaseModel):
     catalogId: str
     categoryId: str
     subcategory: str = ""
-    colors: list[str] = Field(default_factory=list)
+    colorIds: list[str] = Field(default_factory=list)
     brand: str = ""
     size: str = ""
     material: str = ""
@@ -62,6 +72,7 @@ class ItemPayload(BaseModel):
     status: str = "active"
     notes: str = ""
     primaryImageFileId: str | None = None
+    colorPrediction: dict[str, Any] | None = None
 
 
 class ItemPatch(BaseModel):
@@ -69,7 +80,7 @@ class ItemPatch(BaseModel):
     catalogId: str | None = None
     categoryId: str | None = None
     subcategory: str | None = None
-    colors: list[str] | None = None
+    colorIds: list[str] | None = None
     brand: str | None = None
     size: str | None = None
     material: str | None = None
@@ -78,6 +89,7 @@ class ItemPatch(BaseModel):
     status: str | None = None
     notes: str | None = None
     primaryImageFileId: str | None = None
+    colorPrediction: dict[str, Any] | None = None
 
 
 class ItemResponse(BaseModel):
@@ -86,8 +98,8 @@ class ItemResponse(BaseModel):
     catalogId: str
     categoryId: str
     subcategory: str = ""
-    colors: list[str] = Field(default_factory=list)
-    color: str = ""
+    colorIds: list[str] = Field(default_factory=list)
+    colorDetails: list[ColorResponse] = Field(default_factory=list)
     brand: str = ""
     size: str = ""
     material: str = ""

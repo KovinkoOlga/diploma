@@ -17,6 +17,38 @@ class Settings(BaseSettings):
     bg_max_hole_area: int = 128
     bg_close_kernel_size: int = 9
     bg_blur_kernel_size: int = 5
+    color_reliable_alpha_threshold: int = 160
+    color_core_alpha_threshold: int = 220
+    color_mask_erode_kernel: int = 5
+    color_mask_core_distance_px: float = 2.0
+    color_min_mask_component_pixels: int = 128
+    color_max_pixels: int = 50000
+    color_kmeans_k: int = 5
+    color_kmeans_lightness_weight: float = 0.4
+    color_lightness_trim_percentile: float = 2.5
+    color_min_cluster_percent: float = 0.06
+    color_single_color_percent: float = 0.82
+    color_second_color_min_percent: float = 0.3
+    color_neutral_second_color_min_percent: float = 0.2
+    color_multicolor_min_percent: float = 0.12
+    color_multicolor_min_families: int = 3
+    color_neutral_saturation_max: float = 0.18
+    color_neutral_chroma_max: float = 20.0
+    color_soft_chromatic_saturation_min: float = 0.09
+    color_soft_chromatic_chroma_min: float = 10.0
+    color_neutral_chromatic_penalty: float = 14.0
+    color_neutral_primary_override_margin: float = 10.0
+    color_neutral_secondary_score_margin: float = 12.0
+    color_neutral_secondary_strict_score_margin: float = 6.0
+    color_neutral_secondary_max_ab_distance: float = 18.0
+    color_white_lightness_min: float = 82.0
+    color_black_lightness_max: float = 24.0
+    color_beige_lightness_min: float = 62.0
+    color_brown_lightness_max: float = 52.0
+    color_same_family_hue_delta: float = 20.0
+    color_same_family_chroma_delta: float = 18.0
+    color_match_max_score: float = 65.0
+    color_debug: bool = False
 
 
 @lru_cache

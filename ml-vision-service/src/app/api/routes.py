@@ -1,9 +1,10 @@
 from functools import lru_cache
+import json
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.core.config import get_settings
-from app.schemas.analysis import AnalyzeItemImageResponse
+from app.schemas.analysis import AnalyzeItemImageResponse, ColorPaletteEntry
 from app.services.background_removal_service import BackgroundRemovalService
 from app.services.category_prediction_service import CategoryPredictionService
 from app.services.color_prediction_service import ColorPredictionService
@@ -38,19 +39,14 @@ async def health() -> dict:
 
 
 @router.post("/v1/analyze-item-image", response_model=AnalyzeItemImageResponse)
-async def analyze_item_image(image: UploadFile = File(...)) -> AnalyzeItemImageResponse:
+async def analyze_item_image(image: UploadFile = File(...), palette_json: str = Form("[]")) -> AnalyzeItemImageResponse:
     content = await image.read()
-    return get_image_analysis_service().analyze_item_image(content)
+    try:
+        raw_palette = json.loads(palette_json or "[]")
+        if not isinstance(raw_palette, list):
+            raise ValueError("palette_json must be a JSON array")
+        palette = [ColorPaletteEntry.model_validate(entry) for entry in raw_palette]
+    except (json.JSONDecodeError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid palette_json: {exc}")
+    return get_image_analysis_service().analyze_item_image(content, color_palette=palette)
 
-
-@router.post("/v1/remove-background", deprecated=True)
-async def remove_background(image: UploadFile = File(...)) -> dict:
-    content = await image.read()
-    analysis = get_image_analysis_service().analyze_item_image(content)
-    return {
-        "cutout_image": analysis.cutout_image,
-        "mask_image": analysis.mask_image,
-        "mime_type": analysis.mime_type,
-        "category_prediction": analysis.predictions.category,
-        "timings_ms": analysis.timings_ms.model_dump(),
-    }

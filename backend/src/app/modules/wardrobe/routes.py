@@ -136,7 +136,10 @@ async def create_item(
     current_user: dict = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> ItemResponse:
-    return await service.create_item(connection, _user_id(current_user), payload)
+    try:
+        return await service.create_item(connection, _user_id(current_user), payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.patch("/items/{item_id}", response_model=ItemResponse)
@@ -150,6 +153,8 @@ async def patch_item(
         return await service.patch_item(connection, _user_id(current_user), item_id, payload)
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -167,10 +172,13 @@ async def bulk_update(
     current_user: dict = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> list[ItemResponse]:
-    result = []
-    for item_id in payload.itemIds:
-        result.append(await service.patch_item(connection, _user_id(current_user), item_id, payload.patch))
-    return result
+    try:
+        result = []
+        for item_id in payload.itemIds:
+            result.append(await service.patch_item(connection, _user_id(current_user), item_id, payload.patch))
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.post("/items/bulk-delete", status_code=status.HTTP_204_NO_CONTENT)
@@ -189,7 +197,10 @@ async def archive_item(
     current_user: dict = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> ItemResponse:
-    return await service.patch_item(connection, _user_id(current_user), item_id, ItemPatch(status="archived"))
+    try:
+        return await service.patch_item(connection, _user_id(current_user), item_id, ItemPatch(status="archived"))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.post("/items/{item_id}/restore", response_model=ItemResponse)
@@ -199,7 +210,10 @@ async def restore_item(
     current_user: dict = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> ItemResponse:
-    return await service.patch_item(connection, _user_id(current_user), item_id, ItemPatch(status="active", catalogId=catalogId))
+    try:
+        return await service.patch_item(connection, _user_id(current_user), item_id, ItemPatch(status="active", catalogId=catalogId))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.post("/drafts", response_model=DraftResponse)

@@ -1,4 +1,5 @@
 import { toISODate } from "./formatDate";
+import { getItemColorNames, resolveColorDetails } from "./wardrobeColors";
 
 const placeholderImage = require("../../assets/icon.png");
 
@@ -11,17 +12,6 @@ export const WARDROBE_STATUSES = [
 
 export const WARDROBE_SEASONS = ["весна", "лето", "осень", "зима"];
 export const WARDROBE_STYLES = ["casual", "office", "sport", "classic", "warm", "evening", "home"];
-export const WARDROBE_COLORS = [
-  "белый",
-  "молочный",
-  "черный",
-  "серый",
-  "графит",
-  "бежевый",
-  "синий",
-  "зеленый",
-  "розовый",
-];
 export const WARDROBE_MATERIALS = ["хлопок", "деним", "шерсть", "кожа", "вискоза", "эластан", "габардин"];
 export const WARDROBE_SIZES = ["XS", "S", "M", "L", "XL", "38", "39", "40", "one size", "28", "29"];
 export const WARDROBE_SORT_OPTIONS = [
@@ -40,9 +30,10 @@ function ensureArray(value) {
   return [];
 }
 
-export function normalizeWardrobeItemDraft(draft, previousItem) {
+export function normalizeWardrobeItemDraft(draft, previousItem, colorOptions = []) {
   const base = previousItem ?? {};
-  const colors = ensureArray(draft.colors ?? draft.color ?? base.colors);
+  const colorIds = ensureArray(draft.colorIds ?? base.colorIds);
+  const colorDetails = resolveColorDetails(colorIds, colorOptions, draft.colorDetails ?? base.colorDetails);
   const seasons = ensureArray(draft.seasons ?? draft.season ?? base.seasons ?? base.season);
   const styles = ensureArray(draft.styles ?? draft.tags ?? base.styles ?? base.tags);
   const status = draft.status ?? base.status ?? "active";
@@ -55,8 +46,8 @@ export function normalizeWardrobeItemDraft(draft, previousItem) {
     catalogId: draft.catalogId ?? base.catalogId ?? "main",
     categoryId: draft.categoryId ?? base.categoryId ?? "tops",
     subcategory: draft.subcategory ?? base.subcategory ?? "",
-    colors,
-    color: colors[0] ?? "",
+    colorIds,
+    colorDetails,
     brand: draft.brand ?? base.brand ?? "",
     size: draft.size ?? base.size ?? "",
     material: draft.material ?? base.material ?? "",
@@ -70,6 +61,8 @@ export function normalizeWardrobeItemDraft(draft, previousItem) {
     isArchived: draft.isArchived ?? base.isArchived ?? status === "archived",
     notes: draft.notes ?? base.notes ?? "",
     sourceType: draft.sourceType ?? base.sourceType,
+    primaryImageFileId: draft.primaryImageFileId ?? base.primaryImageFileId ?? null,
+    colorPrediction: draft.colorPrediction ?? base.colorPrediction ?? null,
   };
 }
 
@@ -90,7 +83,6 @@ function stemWord(word) {
     /ого$/u,
     /ему$/u,
     /ому$/u,
-    /ыми$/u,
     /ами$/u,
     /ями$/u,
     /ая$/u,
@@ -180,7 +172,7 @@ export function matchesWardrobeSearch(item, query, categories, catalogs) {
     item.material,
     item.size,
     item.status,
-    ...(item.colors ?? []),
+    ...getItemColorNames(item),
     ...(item.seasons ?? item.season ?? []),
     ...(item.styles ?? item.tags ?? []),
   ]);
@@ -200,12 +192,19 @@ function includesValue(filterValue, actualValue) {
   return filterValues.some((value) => actualValues.includes(value));
 }
 
+function matchesColorFilter(item, colorFilter) {
+  if (!colorFilter?.length) return true;
+  const actualColorIds = item.colorIds ?? [];
+  const actualParentIds = (item.colorDetails ?? []).map((entry) => entry.parentColorId).filter(Boolean);
+  return colorFilter.some((value) => actualColorIds.includes(value) || actualParentIds.includes(value));
+}
+
 export function applyWardrobeFilters(items, filters, outfitCountMap = {}) {
   return items.filter((item) => {
     if (!includesValue(filters.catalogId, item.catalogId)) return false;
     if (!includesValue(filters.categoryId, item.categoryId)) return false;
     if (!includesValue(filters.subcategory, item.subcategory)) return false;
-    if (!includesValue(filters.color, item.colors ?? [])) return false;
+    if (!matchesColorFilter(item, filters.color)) return false;
     if (!includesValue(filters.season, item.seasons ?? item.season ?? [])) return false;
     if (!includesValue(filters.style, item.styles ?? item.tags ?? [])) return false;
     if (!includesValue(filters.brand, item.brand)) return false;
@@ -242,10 +241,10 @@ function unique(values) {
   return Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right, "ru"));
 }
 
-export function getWardrobeFilterOptions(items) {
+export function getWardrobeFilterOptions(items, colorOptions = []) {
   return {
     subcategories: unique(items.map((item) => item.subcategory)),
-    colors: unique(items.flatMap((item) => item.colors ?? [])),
+    colors: colorOptions,
     seasons: unique(items.flatMap((item) => item.seasons ?? item.season ?? [])),
     styles: unique(items.flatMap((item) => item.styles ?? item.tags ?? [])),
     brands: unique(items.map((item) => item.brand)),

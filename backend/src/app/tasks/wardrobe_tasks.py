@@ -12,6 +12,7 @@ from app.modules.files.service import (
 )
 from app.modules.ml_clients.vision_client import analyze_item_image
 from app.modules.ml_clients.catalog_client import generate_catalog_image
+from app.modules.wardrobe.service import get_selectable_color_palette
 from app.tasks.celery_app import celery_app, run_async_in_worker
 
 
@@ -78,6 +79,7 @@ async def run_prepare_item_photo(draft_id: str) -> None:
                 )
             )
             original_bytes = await get_file_bytes(connection, draft["original_file_id"], "original")
+            color_palette = await get_selectable_color_palette(connection)
 
         if not original_bytes:
             async with engine.begin() as connection:
@@ -95,7 +97,7 @@ async def run_prepare_item_photo(draft_id: str) -> None:
 
         started = datetime.now(timezone.utc)
         filename = await _file_name(draft["original_file_id"])
-        result = await analyze_item_image(original_bytes, filename=filename)
+        result = await analyze_item_image(original_bytes, filename=filename, color_palette=color_palette)
 
         async with engine.begin() as connection:
             await connection.execute(
@@ -121,6 +123,11 @@ async def run_prepare_item_photo(draft_id: str) -> None:
             payload = dict(draft.get("suggested_payload_json") or {})
             payload["primaryImageFileId"] = cutout_file_id
             payload["recognitionLabel"] = "ML analysis ready"
+            color_prediction = ((result.predictions or {}).get("colors") or {}) if isinstance(result.predictions, dict) else {}
+            color_ids = color_prediction.get("color_ids") or []
+            if color_ids:
+                payload["colorIds"] = color_ids
+            payload["colorPrediction"] = color_prediction
 
             ml_result = _merge_ml_result(
                 draft.get("ml_result_json"),

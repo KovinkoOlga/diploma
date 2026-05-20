@@ -42,6 +42,7 @@ export default function WardrobeItemCard({
   const { colors, typography, spacing, radius } = useAppTheme();
   const tags = item.styles ?? item.tags ?? [];
   const metaText = [item.subcategory, item.brand].filter(Boolean).join(" · ");
+  const tagText = tags.slice(0, 2).join(" · ");
 
   if (variant === "list") {
     return (
@@ -74,7 +75,7 @@ export default function WardrobeItemCard({
                   {item.title}
                 </Text>
                 <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 4 }]} numberOfLines={1}>
-                  {metaText || item.colors?.join(", ") || "Без атрибутов"}
+                  {metaText || "Без атрибутов"}
                 </Text>
               </View>
               {selectionMode ? (
@@ -87,9 +88,11 @@ export default function WardrobeItemCard({
                 <CategoryIcon categoryId={category.id} icon={category.icon} size={18} color={colors.secondaryText} />
               ) : null}
             </View>
-            <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 8 }]} numberOfLines={1}>
-              {[...(item.colors ?? []).slice(0, 1), ...(tags ?? []).slice(0, 2)].join(" · ")}
-            </Text>
+            {tagText ? (
+              <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 8 }]} numberOfLines={1}>
+                {tagText}
+              </Text>
+            ) : null}
             {!selectionMode && showActions ? (
               <View style={{ flexDirection: "row", gap: 8, marginTop: spacing.sm }}>
                 <TinyAction
@@ -168,11 +171,13 @@ export default function WardrobeItemCard({
           {item.title}
         </Text>
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 4 }]} numberOfLines={1}>
-          {metaText || item.colors?.[0] || "Без атрибутов"}
+          {metaText || "Без атрибутов"}
         </Text>
-        <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 4 }]} numberOfLines={1}>
-          {[...(item.colors ?? []).slice(0, 1), ...(tags ?? []).slice(0, 2)].join(" · ")}
-        </Text>
+        {tagText ? (
+          <Text style={[typography.meta, { color: colors.secondaryText, marginTop: 4 }]} numberOfLines={1}>
+            {tagText}
+          </Text>
+        ) : null}
         {!selectionMode && showActions ? (
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm }}>
             <TinyAction icon="open-outline" onPress={onPress} color={colors.text} backgroundColor={colors.background} />

@@ -215,7 +215,7 @@ function ThreeActionEmpty({ navigation }) {
 export default function WardrobeHomeScreen({ navigation }) {
   const { colors, typography, spacing, layout } = useAppTheme();
   const { bottom } = useScreenContentInsets(96);
-  const { items, catalogs, categories, outfits } = useWardrobe();
+  const { items, catalogs, categories, colorOptions, outfits } = useWardrobe();
   const [activeCatalogId, setActiveCatalogId] = useState(catalogs[0]?.id ?? "main");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(createEmptyWardrobeFilters());
@@ -233,7 +233,7 @@ export default function WardrobeHomeScreen({ navigation }) {
   const outfitCountMap = useMemo(() => getOutfitCountMap(outfits), [outfits]);
   const activeItems = useMemo(() => items.filter((item) => !item.isArchived), [items]);
   const catalogItems = useMemo(() => activeItems.filter((item) => item.catalogId === activeCatalogId), [activeCatalogId, activeItems]);
-  const filterOptions = useMemo(() => getWardrobeFilterOptions(catalogItems), [catalogItems]);
+  const filterOptions = useMemo(() => getWardrobeFilterOptions(catalogItems, colorOptions), [catalogItems, colorOptions]);
   const filteredCatalogItems = useMemo(() => {
     const filtered = applyWardrobeFilters(catalogItems, filters, outfitCountMap).filter((item) =>
       matchesWardrobeSearch(item, query, categories, catalogs)

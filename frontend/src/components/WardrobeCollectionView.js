@@ -27,6 +27,7 @@ export default function WardrobeCollectionView({
   items,
   catalogs,
   categories,
+  colorOptions,
   outfits,
   actions,
   title,
@@ -60,7 +61,7 @@ export default function WardrobeCollectionView({
     () => applyWardrobeFilters(items, fixedFilters, outfitCountMap),
     [fixedFilters, items, outfitCountMap]
   );
-  const filterOptions = useMemo(() => getWardrobeFilterOptions(scopedItems), [scopedItems]);
+  const filterOptions = useMemo(() => getWardrobeFilterOptions(scopedItems, colorOptions), [colorOptions, scopedItems]);
   const mergedItems = useMemo(() => {
     const filteredByControls = applyWardrobeFilters(scopedItems, filters, outfitCountMap).filter((item) =>
       matchesWardrobeSearch(item, query, categories, catalogs)
