@@ -7,9 +7,11 @@ const CATEGORY_IMAGES = {
   tops: require("../../assets/wardrobe-icons/tops.png"),
   bottoms: require("../../assets/wardrobe-icons/bottoms.png"),
   dresses: require("../../assets/wardrobe-icons/dresses.png"),
+  one_piece: require("../../assets/wardrobe-icons/dresses.png"),
   outerwear: require("../../assets/wardrobe-icons/outerwear.png"),
   shoes: require("../../assets/wardrobe-icons/shoes.png"),
   accessories: require("../../assets/wardrobe-icons/accessories.png"),
+  bags_accessories: require("../../assets/wardrobe-icons/accessories.png"),
 };
 
 const LEGACY_ICON_MAP = {
@@ -21,6 +23,8 @@ const LEGACY_ICON_MAP = {
   "watch-outline": "accessories",
   pants: "bottoms",
   dress: "dresses",
+  one_piece: "one_piece",
+  bags_accessories: "bags_accessories",
 };
 
 export default function CategoryIcon({ categoryId, icon, size = 20, color }) {

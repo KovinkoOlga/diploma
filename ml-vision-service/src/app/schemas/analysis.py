@@ -40,10 +40,47 @@ class ColorPredictionResponse(BaseModel):
     debug: dict[str, Any] | None = None
 
 
+class CategoryHeadDebug(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    categoryKey: str
+    categoryTitle: str
+    confidence: float
+
+
+class CategoryPredictionDebug(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rawCategory: str
+    rawSubcategory: str
+    categoryHead: CategoryHeadDebug | None = None
+    warnings: list[str] = Field(default_factory=list)
+
+
+class CategoryPredictionSuggestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rank: int
+    categoryId: str
+    categoryTitle: str
+    subcategoryId: str
+    subcategory: str
+    subcategoryKey: str
+    confidence: float
+
+
+class CategoryPredictionResponse(CategoryPredictionSuggestion):
+    model_config = ConfigDict(extra="forbid")
+
+    top3: list[CategoryPredictionSuggestion] = Field(default_factory=list)
+    modelName: str
+    debug: CategoryPredictionDebug
+
+
 class ItemImagePredictions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    category: Any | None = None
+    category: CategoryPredictionResponse | None = None
     colors: ColorPredictionResponse | None = None
 
 

@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    bg_model_path: str = "/app/models/model.keras"
+    bg_model_path: str = "/app/models/background_removal_model.keras"
     bg_enable_stub: bool = False
     bg_img_size: int = 320
     bg_threshold: float = 0.5
@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     color_same_family_chroma_delta: float = 18.0
     color_match_max_score: float = 65.0
     color_debug: bool = False
+    classifier_model_path: str = "/app/models/wardrobe_classifier.keras"
+    classifier_artifacts_dir: str = "/app/models/classifier_artifacts"
+    classifier_enable_stub: bool = False
+    classifier_img_size: int = 320
+    classifier_top_k: int = 3
+    classifier_min_confidence: float = 0.0
+    classifier_use_cutout: bool = True
 
 
 @lru_cache

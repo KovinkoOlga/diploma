@@ -12,6 +12,15 @@
 
 Создайте `.env` в корне из `.env.example`.
 
+Для `ml-vision-service` дополнительно используются:
+
+- `CLASSIFIER_MODEL_PATH=/app/models/wardrobe_classifier.keras`
+- `CLASSIFIER_ARTIFACTS_DIR=/app/models/classifier_artifacts`
+- `CLASSIFIER_ENABLE_STUB=false`
+- `CLASSIFIER_IMG_SIZE=320`
+- `CLASSIFIER_TOP_K=3`
+- `CLASSIFIER_USE_CUTOUT=true`
+
 Для Selectel S3 заполните:
 
 - `S3_ENDPOINT_URL`
@@ -21,6 +30,25 @@
 - `S3_REGION`
 
 Если S3-переменные оставить пустыми, backend сохранит записи о файлах в БД, но presigned URL не будет выдан.
+
+## ML-классификатор
+
+Классификация категории и подкатегории встроена в существующий `ml-vision-service`, новый сервис для этого не создается.
+
+- Файл модели должен лежать в `ml-vision-service/models/wardrobe_classifier.keras`.
+- Артефакты должны лежать в `ml-vision-service/models/classifier_artifacts/`.
+- `taxonomy.csv` в этой папке является источником правды для связи `target_category` ↔ `target_subcategory`.
+- Labels модели русские, а не английские.
+- В артефактах встречаются decomposed Unicode-строки (`Майка`, `Дублёнка`, `Головной убор`), поэтому в коде используется `unicodedata.normalize("NFC", value)`.
+- `wardrobe_classifier.keras` не стоит коммитить в репозиторий: файл может быть большим, а путь уже защищен через `.gitignore`.
+
+После запуска сервиса можно проверить конфиг и наличие артефактов:
+
+```bash
+curl http://localhost:8001/health
+```
+
+В ответе должны быть поля `classifier_model_path`, `classifier_artifacts_dir`, `classifier_stub_enabled`, `classifier_top_k`, `classifier_use_cutout`, а также флаги существования модели и `taxonomy.csv`.
 
 ## Backend
 
@@ -32,7 +60,8 @@ Compose поднимает:
 
 - `postgres` с healthcheck и volume;
 - `migrations`, который выполняет `alembic upgrade head` и завершается;
-- `backend` на `http://localhost:8000`.
+- `backend` на `http://localhost:8000`;
+- `ml-vision-service` на `http://localhost:8001`.
 
 Проверка:
 
@@ -91,6 +120,16 @@ npx expo start
 6. Проверьте, что подкатегория появилась в фильтрах.
 7. Проверьте поиск, фильтры и сортировку.
 8. Проверьте редактирование, архив, восстановление и удаление.
+
+## Проверка E2E photo draft
+
+1. Запустите `docker compose up --build`.
+2. Проверьте `http://localhost:8001/health` и убедитесь, что classifier-модель и `taxonomy.csv` найдены.
+3. В приложении откройте `Шкаф` → добавление вещи из photo или gallery.
+4. Дождитесь экрана подтверждения: top-1 подкатегория должна быть выбрана автоматически, а ниже должен появиться блок `Предложено AI` с top-3.
+5. Нажмите suggestion из другой категории и проверьте, что меняются и `categoryId`, и список подкатегорий.
+6. Введите собственную подкатегорию вручную и сохраните вещь.
+7. После сохранения проверьте, что открывается сначала главная страница шкафа, затем карточка созданной вещи.
 
 ## Ограничения MVP
 

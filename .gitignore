@@ -55,3 +55,4 @@ __pycache__/
 
 # ML
 *.keras
+ml-vision-service/models/*.h5

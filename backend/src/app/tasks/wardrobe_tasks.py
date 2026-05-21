@@ -46,6 +46,31 @@ async def _file_name(file_id: str | None) -> str:
         return filename or "image.png"
 
 
+def _apply_ml_predictions_to_payload(payload: dict, predictions: dict | None) -> dict:
+    next_payload = dict(payload)
+    prediction_map = dict(predictions or {})
+
+    category_prediction = prediction_map.get("category")
+    colors_prediction = prediction_map.get("colors") or {}
+
+    next_payload["recognitionLabel"] = "ML analysis ready"
+    if isinstance(category_prediction, dict):
+        confidence = max(0.0, min(1.0, float(category_prediction.get("confidence") or 0.0)))
+        next_payload["categoryId"] = category_prediction.get("categoryId") or next_payload.get("categoryId")
+        next_payload["subcategory"] = category_prediction.get("subcategory") or next_payload.get("subcategory")
+        next_payload["categoryPrediction"] = category_prediction
+        next_payload["subcategorySuggestions"] = category_prediction.get("top3") or []
+        next_payload["recognitionLabel"] = (
+            f"Распознано: {next_payload.get('subcategory') or 'вещь'} ({round(confidence * 100)}%)"
+        )
+
+    color_ids = colors_prediction.get("color_ids") or []
+    if color_ids:
+        next_payload["colorIds"] = color_ids
+    next_payload["colorPrediction"] = colors_prediction
+    return next_payload
+
+
 async def run_prepare_item_photo(draft_id: str) -> None:
     try:
         draft = await _get_draft_row(draft_id)
@@ -122,12 +147,10 @@ async def run_prepare_item_photo(draft_id: str) -> None:
 
             payload = dict(draft.get("suggested_payload_json") or {})
             payload["primaryImageFileId"] = cutout_file_id
-            payload["recognitionLabel"] = "ML analysis ready"
-            color_prediction = ((result.predictions or {}).get("colors") or {}) if isinstance(result.predictions, dict) else {}
-            color_ids = color_prediction.get("color_ids") or []
-            if color_ids:
-                payload["colorIds"] = color_ids
-            payload["colorPrediction"] = color_prediction
+            payload = _apply_ml_predictions_to_payload(
+                payload,
+                result.predictions if isinstance(result.predictions, dict) else {},
+            )
 
             ml_result = _merge_ml_result(
                 draft.get("ml_result_json"),

@@ -202,7 +202,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
                 index: 1,
                 routes: [
                   { name: Routes.WardrobeHome },
-                  { name: Routes.ItemDetails, params: { itemId: saved.id } },
+                  { name: Routes.WardrobeItemDetails, params: { itemId: saved.id } },
                 ],
               });
             } finally {

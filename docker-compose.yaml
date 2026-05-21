@@ -36,7 +36,13 @@ services:
     env_file:
       - .env
     environment:
-      BG_MODEL_PATH: /app/models/model.keras
+      BG_MODEL_PATH: /app/models/background_removal_model.keras
+      CLASSIFIER_MODEL_PATH: /app/models/wardrobe_classifier.keras
+      CLASSIFIER_ARTIFACTS_DIR: /app/models/classifier_artifacts
+      CLASSIFIER_ENABLE_STUB: "false"
+      CLASSIFIER_IMG_SIZE: "320"
+      CLASSIFIER_TOP_K: "3"
+      CLASSIFIER_USE_CUTOUT: "true"
     ports:
       - "8001:8001"
 

@@ -10,6 +10,7 @@ import {
 } from "../utils/wardrobe";
 import { buildColorOptionMap, toggleColorSelection } from "../utils/wardrobeColors";
 import ActionButton from "./ActionButton";
+import CategorySubcategoryPicker from "./CategorySubcategoryPicker";
 import Chip from "./Chip";
 import CollapsibleColorSelector from "./CollapsibleColorSelector";
 import Input from "./Input";
@@ -31,10 +32,6 @@ export default function WardrobeItemForm({
   enhanceBusy = false,
 }) {
   const { colors, typography, spacing, radius } = useAppTheme();
-  const selectedCategory = useMemo(
-    () => categories.find((category) => category.id === draft.categoryId) ?? categories[0],
-    [categories, draft.categoryId]
-  );
   const colorOptionsById = useMemo(() => buildColorOptionMap(colorOptions), [colorOptions]);
 
   const toggleArrayValue = (field, value) => {
@@ -49,7 +46,6 @@ export default function WardrobeItemForm({
       ...draft,
       colorIds: nextColorIds,
       colorDetails: nextColorIds.map((id) => colorOptionsById[id]).filter(Boolean),
-      colorPrediction: null,
     });
   };
 
@@ -150,42 +146,7 @@ export default function WardrobeItemForm({
             />
           ))}
         </View>
-        <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Категория</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {categories.map((category) => (
-            <Chip
-              key={category.id}
-              label={category.title}
-              selected={draft.categoryId === category.id}
-              onPress={() =>
-                onChange({
-                  ...draft,
-                  categoryId: category.id,
-                  subcategory: category.subcategories?.includes(draft.subcategory)
-                    ? draft.subcategory
-                    : category.subcategories?.[0] ?? "",
-                })
-              }
-            />
-          ))}
-        </View>
-        <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Подкатегория</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {(selectedCategory?.subcategories ?? []).map((subcategory) => (
-            <Chip
-              key={subcategory}
-              label={subcategory}
-              selected={draft.subcategory === subcategory}
-              onPress={() => setField("subcategory", subcategory)}
-            />
-          ))}
-        </View>
-        <Input
-          value={draft.subcategory}
-          onChangeText={(value) => setField("subcategory", value)}
-          placeholder="Уточните подкатегорию"
-          style={{ marginTop: spacing.sm }}
-        />
+        <CategorySubcategoryPicker draft={draft} categories={categories} onChange={onChange} />
       </View>
 
       <View style={{ marginTop: spacing.lg }}>
@@ -206,7 +167,6 @@ export default function WardrobeItemForm({
                 ...draft,
                 colorIds: [],
                 colorDetails: [],
-                colorPrediction: null,
               })
             }
           />

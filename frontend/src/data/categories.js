@@ -18,6 +18,12 @@ export const wardrobeCategories = [
     subcategories: ["Платья", "Комбинезоны"],
   },
   {
+    id: "one_piece",
+    title: "Слитное",
+    icon: "dresses",
+    subcategories: ["Платье", "Комбинезон", "Сарафан"],
+  },
+  {
     id: "outerwear",
     title: "Верхняя одежда",
     icon: "outerwear",
@@ -34,6 +40,12 @@ export const wardrobeCategories = [
     title: "Сумки и аксессуары",
     icon: "accessories",
     subcategories: ["Шоперы", "Кросс-боди", "Рюкзаки", "Клатчи", "Шарфы", "Украшения", "Ремни", "Головные уборы"],
+  },
+  {
+    id: "bags_accessories",
+    title: "Сумки и аксессуары",
+    icon: "accessories",
+    subcategories: ["Сумка / рюкзак", "Ремень", "Шарф", "Украшения", "Головной убор", "Очки", "Перчатки"],
   },
 ];
 

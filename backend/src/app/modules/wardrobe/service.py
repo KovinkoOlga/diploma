@@ -51,6 +51,7 @@ from app.modules.wardrobe.schemas import (
     StatusResponse,
     TemplateResponse,
 )
+from app.modules.wardrobe.taxonomy import SYSTEM_SUBCATEGORIES
 
 
 PRIMARY_READY_STATUS = "ready"
@@ -65,7 +66,13 @@ MASK_EDITOR_MAX_SIZE = 1024
 
 
 def normalize_name(value: str) -> str:
-    return " ".join(value.strip().lower().replace("С‘", "Рµ").split())
+    import re
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFC", str(value or "")).strip()
+    normalized = re.sub(r"\s*[_/\\-]+\s*", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.lower().strip()
 
 
 def _csv(values: list[str] | None) -> list[str]:
@@ -142,7 +149,12 @@ def _build_item_color_rows(color_ids: list[str], color_prediction: dict[str, Any
         for entry in ((color_prediction or {}).get("colors") or [])
         if isinstance(entry, dict) and entry.get("id")
     }
-    source = "ml" if color_prediction else "manual"
+    predicted_color_ids = [
+        str(color_id)
+        for color_id in ((color_prediction or {}).get("color_ids") or [])
+        if color_id
+    ]
+    source = "ml" if predicted_color_ids == [str(color_id) for color_id in color_ids] and color_prediction else "manual"
     rows: list[dict[str, Any]] = []
     for position, color_id in enumerate(color_ids):
         predicted = prediction_by_id.get(color_id) or {}
@@ -160,6 +172,44 @@ def _build_item_color_rows(color_ids: list[str], color_prediction: dict[str, Any
     return rows
 
 
+def _merge_item_attributes(
+    current_attributes: dict[str, Any] | None,
+    *,
+    material: str,
+    category_prediction: dict[str, Any] | None,
+    color_prediction: dict[str, Any] | None,
+    preserve_existing_ml: bool = True,
+) -> dict[str, Any]:
+    attributes = dict(current_attributes or {})
+    attributes["material"] = material.strip()
+
+    existing_ml = attributes.get("ml") if isinstance(attributes.get("ml"), dict) else {}
+    ml_payload = dict(existing_ml) if preserve_existing_ml else {}
+    if category_prediction is not None:
+        ml_payload["categoryPrediction"] = category_prediction
+    if color_prediction is not None:
+        ml_payload["colorPrediction"] = color_prediction
+
+    if ml_payload:
+        attributes["ml"] = ml_payload
+    else:
+        attributes.pop("ml", None)
+
+    return attributes
+
+
+def _ordered_unique_subcategory_names(entries: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    names: list[str] = []
+    for entry in entries:
+        name = str(entry["name"])
+        if name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
 async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapResponse:
     catalog_rows = (
         await connection.execute(
@@ -172,9 +222,21 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
             select(subcategories).where(or_(subcategories.c.user_id == user_id, subcategories.c.user_id.is_(None)))
         )
     ).mappings().all()
-    subcategories_by_category: dict[str, list[str]] = {}
+    model_system_subcategory_ids = {entry["id"] for entry in SYSTEM_SUBCATEGORIES}
+    model_system_subcategory_order = {entry["id"]: index for index, entry in enumerate(SYSTEM_SUBCATEGORIES)}
+    subcategories_by_category: dict[str, list[dict[str, Any]]] = {}
     for row in subcategory_rows:
-        subcategories_by_category.setdefault(row["category_id"], []).append(row["name"])
+        is_model_system = row["id"] in model_system_subcategory_ids
+        if row["user_id"] is None and row.get("is_system") and not is_model_system:
+            continue
+        subcategories_by_category.setdefault(row["category_id"], []).append(
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "is_system": row.get("is_system", False),
+                "order": model_system_subcategory_order.get(row["id"], 10_000),
+            }
+        )
 
     status_rows = (await connection.execute(select(item_statuses).order_by(item_statuses.c.sort_order))).mappings().all()
     color_options = await get_color_options(connection)
@@ -202,7 +264,16 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
                 id=row["id"],
                 title=row["name"],
                 icon=row["icon_key"],
-                subcategories=sorted(set(subcategories_by_category.get(row["id"], []))),
+                subcategories=_ordered_unique_subcategory_names(
+                    sorted(
+                        subcategories_by_category.get(row["id"], []),
+                        key=lambda entry: (
+                            0 if entry["is_system"] else 1,
+                            entry["order"],
+                            entry["name"],
+                        ),
+                    )
+                ),
             )
             for row in category_rows
         ],
@@ -578,7 +649,13 @@ async def create_item(connection: AsyncConnection, user_id: str, payload: ItemPa
         "brand_id": await _ensure_brand(connection, user_id, payload.brand),
         "size_id": await _size_id(connection, payload.size),
         "notes": payload.notes,
-        "attributes_json": {"material": payload.material.strip()},
+        "attributes_json": _merge_item_attributes(
+            None,
+            material=payload.material,
+            category_prediction=payload.categoryPrediction,
+            color_prediction=payload.colorPrediction,
+            preserve_existing_ml=False,
+        ),
     }
     await connection.execute(insert(wardrobe_items).values(values))
     await _replace_item_links(
@@ -594,6 +671,15 @@ async def create_item(connection: AsyncConnection, user_id: str, payload: ItemPa
 
 async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, payload: ItemPatch) -> ItemResponse:
     current = await get_item(connection, user_id, item_id)
+    current_row = (
+        await connection.execute(
+            select(wardrobe_items.c.attributes_json).where(
+                wardrobe_items.c.id == item_id,
+                wardrobe_items.c.user_id == user_id,
+            )
+        )
+    ).mappings().first()
+    current_attributes = dict((current_row or {}).get("attributes_json") or {})
     merged = ItemPayload(
         title=payload.title if payload.title is not None else current.title,
         catalogId=payload.catalogId if payload.catalogId is not None else current.catalogId,
@@ -608,6 +694,7 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
         status=payload.status if payload.status is not None else current.status,
         notes=payload.notes if payload.notes is not None else current.notes,
         primaryImageFileId=payload.primaryImageFileId if payload.primaryImageFileId is not None else current.primaryImageFileId,
+        categoryPrediction=payload.categoryPrediction,
         colorPrediction=payload.colorPrediction,
     )
     await connection.execute(
@@ -623,7 +710,12 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
             brand_id=await _ensure_brand(connection, user_id, merged.brand),
             size_id=await _size_id(connection, merged.size),
             notes=merged.notes,
-            attributes_json={"material": merged.material.strip()},
+            attributes_json=_merge_item_attributes(
+                current_attributes,
+                material=merged.material,
+                category_prediction=payload.categoryPrediction,
+                color_prediction=payload.colorPrediction,
+            ),
             updated_at=datetime.now(timezone.utc),
         )
     )
@@ -662,6 +754,9 @@ def _default_draft_payload(template: dict, source_type: str, catalog_id: str, fi
         "sourceType": source_type,
         "recognitionLabel": "Template defaults" if source_type == "catalog" else "Image processing in progress",
         "primaryImageFileId": file_id,
+        "categoryPrediction": None,
+        "subcategorySuggestions": [],
+        "colorPrediction": None,
     }
 
 

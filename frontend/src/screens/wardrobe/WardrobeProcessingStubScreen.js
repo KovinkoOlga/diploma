@@ -7,10 +7,11 @@ import { Routes } from "../../navigation/routes";
 import { useWardrobe } from "../../store/WardrobeStore";
 
 const steps = [
-  { status: "contour_preparing", title: "Подготовка контура вещи" },
-  { status: "background_removing", title: "Будущее удаление фона" },
-  { status: "category_recognizing", title: "Будущее распознавание категории" },
-  { status: "attributes_suggested", title: "Подбор моковых атрибутов для подтверждения" },
+  { status: "contour_preparing", title: "Подготавливаем изображение" },
+  { status: "background_removing", title: "Удаляем фон" },
+  { status: "category_recognizing", title: "Определяем категорию и подкатегорию" },
+  { status: "colors_extracting", title: "Определяем цвета" },
+  { status: "attributes_suggested", title: "Готовим карточку вещи" },
 ];
 
 function stepDone(currentStatus, stepIndex) {
@@ -77,7 +78,7 @@ export default function WardrobeProcessingStubScreen({ navigation, route }) {
           Обработка вещи
         </Text>
         <Text style={[typography.body, { color: colors.secondaryText, marginTop: spacing.sm, textAlign: "center" }]}>
-          Скоро здесь будет автоматическое распознавание вещи, удаление фона и предложение атрибутов.
+          Анализируем фото: удаляем фон, определяем тип вещи и основные атрибуты.
         </Text>
       </View>
 

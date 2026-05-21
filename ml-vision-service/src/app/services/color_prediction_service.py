@@ -11,6 +11,7 @@ from PIL import Image
 
 from app.core.config import get_settings
 from app.schemas.analysis import ColorPredictionItem, ColorPredictionResponse
+from app.utils.image_io import load_rgb_image
 
 
 NEUTRAL_FAMILIES = {"white", "black", "gray"}
@@ -658,7 +659,7 @@ class ColorPredictionService:
         if not palette_references:
             return None
 
-        image_rgb = np.array(Image.open(BytesIO(image_bytes)).convert("RGB"))
+        image_rgb = np.array(load_rgb_image(image_bytes))
         mask = load_mask(mask_image_bytes)
         if mask.shape[:2] != image_rgb.shape[:2]:
             mask = cv2.resize(mask, (image_rgb.shape[1], image_rgb.shape[0]), interpolation=cv2.INTER_NEAREST)

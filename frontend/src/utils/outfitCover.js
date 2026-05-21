@@ -25,8 +25,10 @@ const CATEGORY_PLACEMENT = {
   bottoms: { x: 0.49, y: 0.56, initialScale: 1.12, spreadX: 54, spreadY: 34 },
   shoes: { x: 0.5, y: 0.83, initialScale: 0.9, spreadX: 50, spreadY: 18 },
   dresses: { x: 0.5, y: 0.45, initialScale: 1.25, spreadX: 40, spreadY: 34 },
+  one_piece: { x: 0.5, y: 0.45, initialScale: 1.25, spreadX: 40, spreadY: 34 },
   bags: { x: 0.79, y: 0.52, initialScale: 0.88, spreadX: 42, spreadY: 24 },
   accessories: { x: 0.22, y: 0.31, initialScale: 0.78, spreadX: 36, spreadY: 20 },
+  bags_accessories: { x: 0.64, y: 0.4, initialScale: 0.86, spreadX: 42, spreadY: 24 },
   default: { x: 0.5, y: 0.5, initialScale: 1, spreadX: 52, spreadY: 32 },
 };
 
@@ -59,9 +61,11 @@ const CATEGORY_ALIASES = {
   dress: "dresses",
   dresses: "dresses",
   jumpsuit: "dresses",
+  one_piece: "one_piece",
 
   bag: "bags",
   bags: "bags",
+  bags_accessories: "bags_accessories",
 
   accessory: "accessories",
   accessories: "accessories",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from time import perf_counter
 
+from app.core.config import get_settings
 from app.schemas.analysis import AnalysisTimingsMs, AnalyzeItemImageResponse, ColorPaletteEntry, ItemImagePredictions
 from app.services.background_removal_service import BackgroundRemovalService
 from app.services.category_prediction_service import CategoryPredictionService
@@ -34,7 +35,10 @@ class ImageAnalysisService:
         background_ms = int((perf_counter() - background_started) * 1000)
 
         category_started = perf_counter()
-        category_prediction = self._category_prediction_service.predict(image_bytes)
+        category_image_bytes = (
+            background_result.cutout_image if get_settings().classifier_use_cutout else image_bytes
+        )
+        category_prediction = self._category_prediction_service.predict(category_image_bytes)
         category_ms = int((perf_counter() - category_started) * 1000)
 
         colors_started = perf_counter()

@@ -62,6 +62,12 @@ export function normalizeWardrobeItemDraft(draft, previousItem, colorOptions = [
     notes: draft.notes ?? base.notes ?? "",
     sourceType: draft.sourceType ?? base.sourceType,
     primaryImageFileId: draft.primaryImageFileId ?? base.primaryImageFileId ?? null,
+    categoryPrediction: draft.categoryPrediction ?? base.categoryPrediction ?? null,
+    subcategorySuggestions:
+      draft.subcategorySuggestions ??
+      draft.categoryPrediction?.top3 ??
+      base.subcategorySuggestions ??
+      [],
     colorPrediction: draft.colorPrediction ?? base.colorPrediction ?? null,
   };
 }

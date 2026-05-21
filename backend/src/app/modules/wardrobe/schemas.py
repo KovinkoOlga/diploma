@@ -72,6 +72,7 @@ class ItemPayload(BaseModel):
     status: str = "active"
     notes: str = ""
     primaryImageFileId: str | None = None
+    categoryPrediction: dict[str, Any] | None = None
     colorPrediction: dict[str, Any] | None = None
 
 
@@ -89,6 +90,7 @@ class ItemPatch(BaseModel):
     status: str | None = None
     notes: str | None = None
     primaryImageFileId: str | None = None
+    categoryPrediction: dict[str, Any] | None = None
     colorPrediction: dict[str, Any] | None = None
 
 
