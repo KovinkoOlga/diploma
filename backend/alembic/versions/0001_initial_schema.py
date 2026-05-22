@@ -13,7 +13,6 @@ from app.db.metadata import (
     item_statuses,
     metadata,
     seasons,
-    sizes,
     styles,
     subcategories,
     wardrobe_item_templates,
@@ -47,14 +46,14 @@ CATEGORIES = [
 ]
 
 TEMPLATES = [
-    ("template_1", "Белая рубашка", "tops", "Рубашки", "", "", "хлопок", ["white_pure"], ["весна", "лето", "осень"], ["office", "classic"], 10),
-    ("template_2", "Черные джинсы", "bottoms", "Джинсы", "", "", "деним", ["black_pure"], ["осень", "зима", "весна"], ["casual"], 20),
-    ("template_3", "Бежевый тренч", "outerwear", "Тренчи", "", "", "габардин", ["beige_neutral"], ["весна", "осень"], ["classic", "office"], 30),
-    ("template_4", "Белые кроссовки", "shoes", "Кроссовки", "", "", "кожа", ["white_pure"], ["весна", "лето", "осень"], ["casual", "sport"], 40),
-    ("template_5", "Черное платье", "dresses", "Платья", "", "", "вискоза", ["black_pure"], ["лето", "осень"], ["evening", "classic"], 50),
-    ("template_6", "Кожаная сумка", "accessories", "Кросс-боди", "", "", "кожа", ["black_pure"], ["весна", "лето", "осень", "зима"], ["classic"], 60),
-    ("template_7", "Спортивные легинсы", "bottoms", "Брюки", "", "", "эластан", ["black_pure"], ["весна", "лето", "осень", "зима"], ["sport"], 70),
-    ("template_8", "Шерстяной шарф", "accessories", "Шарфы", "", "", "шерсть", ["gray_neutral"], ["осень", "зима"], ["warm", "classic"], 80),
+    ("template_1", "Белая рубашка", "tops", "Рубашки", "", ["white_pure"], ["весна", "лето", "осень"], ["office", "classic"], 10),
+    ("template_2", "Черные джинсы", "bottoms", "Джинсы", "", ["black_pure"], ["осень", "зима", "весна"], ["casual"], 20),
+    ("template_3", "Бежевый тренч", "outerwear", "Тренчи", "", ["beige_neutral"], ["весна", "осень"], ["classic", "office"], 30),
+    ("template_4", "Белые кроссовки", "shoes", "Кроссовки", "", ["white_pure"], ["весна", "лето", "осень"], ["casual", "sport"], 40),
+    ("template_5", "Черное платье", "dresses", "Платья", "", ["black_pure"], ["лето", "осень"], ["evening", "classic"], 50),
+    ("template_6", "Кожаная сумка", "accessories", "Кросс-боди", "", ["black_pure"], ["весна", "лето", "осень", "зима"], ["classic"], 60),
+    ("template_7", "Спортивные легинсы", "bottoms", "Брюки", "", ["black_pure"], ["весна", "лето", "осень", "зима"], ["sport"], 70),
+    ("template_8", "Шерстяной шарф", "accessories", "Шарфы", "", ["gray_neutral"], ["осень", "зима"], ["warm", "classic"], 80),
 ]
 
 
@@ -101,13 +100,6 @@ def upgrade() -> None:
     )
     op.bulk_insert(colors, SYSTEM_COLOR_CATALOG)
     op.bulk_insert(
-        sizes,
-        [
-            {"id": f"size_{index}", "name": name, "category_id": None}
-            for index, name in enumerate(["XS", "S", "M", "L", "XL", "38", "39", "40", "one size", "28", "29"], start=1)
-        ],
-    )
-    op.bulk_insert(
         styles,
         [
             {"id": f"style_{name}", "user_id": None, "name": name, "normalized_name": _norm(name), "is_system": True}
@@ -123,8 +115,6 @@ def upgrade() -> None:
                 "category_id": category_id,
                 "subcategory_name": subcategory,
                 "brand": brand,
-                "size_name": size_name,
-                "material": material,
                 "color_ids_json": color_values,
                 "seasons_json": season_values,
                 "styles_json": style_values,
@@ -136,8 +126,6 @@ def upgrade() -> None:
                 category_id,
                 subcategory,
                 brand,
-                size_name,
-                material,
                 color_values,
                 season_values,
                 style_values,

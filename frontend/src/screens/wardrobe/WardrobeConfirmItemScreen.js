@@ -1,58 +1,92 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { View } from "react-native";
 import Screen from "../../components/Screen";
 import ActionButton from "../../components/ActionButton";
 import WardrobeItemForm from "../../components/WardrobeItemForm";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
-import { createDraftFromItem, normalizeWardrobeItemDraft } from "../../utils/wardrobe";
+import { createDraftFromItem, finalizeDraftStyleInput, normalizeWardrobeItemDraft } from "../../utils/wardrobe";
 
 function imageSourceForOption(option) {
   return option?.imageUrl ? { uri: option.imageUrl } : undefined;
 }
 
 export default function WardrobeConfirmItemScreen({ navigation, route }) {
-  const { typography, colors, spacing } = useAppTheme();
-  const { catalogs, categories, colorOptions, items, actions } = useWardrobe();
+  const { spacing } = useAppTheme();
+  const { catalogs, categories, colorOptions, seasonOptions, styleOptions, statusOptions, items, actions } = useWardrobe();
   const existingItem = useMemo(() => items.find((item) => item.id === route.params?.itemId), [items, route.params?.itemId]);
   const isEditMode = Boolean(existingItem);
   const draftId = route.params?.draftId;
+  const [titleFocused, setTitleFocused] = useState(false);
+
+  const normalizeDraft = useCallback(
+    (nextDraft, previousDraft) =>
+      normalizeWardrobeItemDraft(nextDraft, previousDraft, colorOptions, {
+        seasonOptions,
+        statusOptions,
+        suppressAutoTitle: titleFocused,
+      }),
+    [colorOptions, seasonOptions, statusOptions, titleFocused]
+  );
 
   const [saving, setSaving] = useState(false);
   const [enhancing, setEnhancing] = useState(false);
   const [draftState, setDraftState] = useState(null);
-  const [draft, setDraft] = useState(
-    normalizeWardrobeItemDraft(route.params?.draft ?? createDraftFromItem(existingItem ?? {}), existingItem, colorOptions)
+  const [draft, setDraft] = useState(() =>
+    normalizeDraft(
+      route.params?.draft ?? createDraftFromItem(existingItem ?? {}, colorOptions, { seasonOptions, statusOptions }),
+      existingItem
+    )
   );
 
-  const syncDraftState = (next) => {
-    setDraftState(next);
-    if (!next?.draft) return;
+  const updateDraft = useCallback(
+    (nextDraft) => {
+      setDraft((current) => normalizeDraft(typeof nextDraft === "function" ? nextDraft(current) : nextDraft, current));
+    },
+    [normalizeDraft]
+  );
 
-    setDraft((current) => {
-      const normalized = normalizeWardrobeItemDraft(next.draft, current, colorOptions);
-      const optionIds = [next.images?.cutout?.fileId, next.images?.catalog?.fileId].filter(Boolean);
-      const currentSelectionIsValid = current.primaryImageFileId && optionIds.includes(current.primaryImageFileId);
-      const selectedPrimaryImageId = currentSelectionIsValid
-        ? current.primaryImageFileId
-        : normalized.primaryImageFileId;
-      let selectedImage = currentSelectionIsValid ? current.image ?? normalized.image : normalized.image;
+  const syncDraftState = useCallback(
+    (next) => {
+      setDraftState(next);
+      if (!next?.draft) return;
 
-      if (selectedPrimaryImageId && next.images?.catalog?.fileId === selectedPrimaryImageId) {
-        selectedImage = imageSourceForOption(next.images.catalog) ?? selectedImage;
-      } else if (selectedPrimaryImageId && next.images?.cutout?.fileId === selectedPrimaryImageId) {
-        selectedImage = imageSourceForOption(next.images.cutout) ?? selectedImage;
-      }
+      setDraft((current) => {
+        const normalized = normalizeDraft(next.draft, current);
+        const optionIds = [next.images?.cutout?.fileId, next.images?.catalog?.fileId].filter(Boolean);
+        const currentSelectionIsValid = current.primaryImageFileId && optionIds.includes(current.primaryImageFileId);
+        const selectedPrimaryImageId = currentSelectionIsValid ? current.primaryImageFileId : normalized.primaryImageFileId;
+        let selectedImage = currentSelectionIsValid ? current.image ?? normalized.image : normalized.image;
 
-      return {
-        ...normalized,
-        ...current,
-        primaryImageFileId: selectedPrimaryImageId,
-        image: selectedImage,
-      };
-    });
-  };
+        if (selectedPrimaryImageId && next.images?.catalog?.fileId === selectedPrimaryImageId) {
+          selectedImage = imageSourceForOption(next.images.catalog) ?? selectedImage;
+        } else if (selectedPrimaryImageId && next.images?.cutout?.fileId === selectedPrimaryImageId) {
+          selectedImage = imageSourceForOption(next.images.cutout) ?? selectedImage;
+        }
+
+        return normalizeDraft(
+          {
+            ...normalized,
+            ...current,
+            primaryImageFileId: selectedPrimaryImageId,
+            image: selectedImage,
+          },
+          current
+        );
+      });
+    },
+    [normalizeDraft]
+  );
+
+  useEffect(() => {
+    setDraft((current) => normalizeDraft(current, current));
+  }, [normalizeDraft]);
+
+  useEffect(() => {
+    if (!existingItem || draftId) return;
+    setDraft(normalizeDraft(createDraftFromItem(existingItem, colorOptions, { seasonOptions, statusOptions }), existingItem));
+  }, [colorOptions, draftId, existingItem, normalizeDraft, seasonOptions, statusOptions]);
 
   useEffect(() => {
     let alive = true;
@@ -72,7 +106,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     return () => {
       alive = false;
     };
-  }, [actions, colorOptions, draftId, route.params?.maskEditedAt]);
+  }, [actions, draftId, route.params?.maskEditedAt, syncDraftState]);
 
   const pollCatalogStatus = async () => {
     if (!draftId) return;
@@ -97,34 +131,38 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
   };
 
   const saveDraft = async () => {
+    const preparedDraft = finalizeDraftStyleInput(draft, styleOptions);
+    setDraft((current) => normalizeDraft(preparedDraft, current));
+
     if (existingItem) {
-      const updated = await actions.updateItem(existingItem.id, draft);
-      return updated ?? { ...existingItem, ...draft };
+      const updated = await actions.updateItem(existingItem.id, preparedDraft);
+      return updated ?? { ...existingItem, ...preparedDraft };
     }
 
     if (draftId) {
-      return actions.confirmDraft(draftId, draft);
+      return actions.confirmDraft(draftId, preparedDraft);
     }
 
-    return actions.addItem(draft);
+    return actions.addItem(preparedDraft);
   };
 
   return (
     <Screen scroll padded withKeyboard>
-   
-
-      <View >
+      <View>
         <WardrobeItemForm
           draft={draft}
-          onChange={setDraft}
+          onChange={updateDraft}
           catalogs={catalogs}
           categories={categories}
           colorOptions={colorOptions}
+          seasonOptions={seasonOptions}
+          styleOptions={styleOptions}
+          statusOptions={statusOptions}
           draftImages={draftState?.images}
           catalogProcessingStatus={draftState?.catalogProcessingStatus}
           catalogErrorMessage={draftState?.catalogErrorMessage}
           onSelectImageOption={(imageOption) =>
-            setDraft((current) => ({
+            updateDraft((current) => ({
               ...current,
               primaryImageFileId: imageOption.fileId,
               image: imageSourceForOption(imageOption) ?? current.image,
@@ -180,6 +218,17 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
               : undefined
           }
           enhanceBusy={enhancing}
+          onTitleFocus={() => setTitleFocused(true)}
+          onTitleBlur={() => {
+            setTitleFocused(false);
+            setDraft((current) =>
+              normalizeWardrobeItemDraft(current, current, colorOptions, {
+                seasonOptions,
+                statusOptions,
+                suppressAutoTitle: false,
+              })
+            );
+          }}
         />
       </View>
 

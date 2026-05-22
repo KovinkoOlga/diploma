@@ -66,13 +66,13 @@ function InfoTable({ rows }) {
 
 export default function WardrobeItemDetailsScreen({ navigation, route }) {
   const { colors, typography, spacing, radius } = useAppTheme();
-  const { items, categories, catalogs, outfits, actions } = useWardrobe();
+  const { items, categories, catalogs, outfits, statusOptions, actions } = useWardrobe();
   const [restoreVisible, setRestoreVisible] = useState(false);
   const [restoreCatalogId, setRestoreCatalogId] = useState("");
   const item = useMemo(() => items.find((entry) => entry.id === route.params?.itemId), [items, route.params?.itemId]);
   const category = categories.find((entry) => entry.id === item?.categoryId);
   const catalog = catalogs.find((entry) => entry.id === item?.catalogId);
-  const status = getStatusMeta(item?.status);
+  const status = getStatusMeta(item?.status, statusOptions);
   const relatedOutfits = useMemo(
     () => outfits.filter((outfit) => outfit.itemIds?.includes(route.params?.itemId)),
     [outfits, route.params?.itemId]
@@ -122,8 +122,6 @@ export default function WardrobeItemDetailsScreen({ navigation, route }) {
         ),
     },
     { label: "Бренд", value: item.brand },
-    { label: "Размер", value: item.size },
-    { label: "Материал", value: item.material },
     { label: "Сезон", value: (item.seasons ?? []).join(", ") },
     { label: "Стиль", value: (item.styles ?? []).join(", ") },
     { label: "Дата добавления", value: item.createdAt },

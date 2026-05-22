@@ -1,14 +1,8 @@
 import React, { useMemo } from "react";
 import { Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
-import {
-  WARDROBE_MATERIALS,
-  WARDROBE_SEASONS,
-  WARDROBE_SIZES,
-  WARDROBE_STATUSES,
-  WARDROBE_STYLES,
-} from "../utils/wardrobe";
 import { buildColorOptionMap, toggleColorSelection } from "../utils/wardrobeColors";
+import { finalizeDraftStyleInput, normalizeStyleName } from "../utils/wardrobe";
 import ActionButton from "./ActionButton";
 import CategorySubcategoryPicker from "./CategorySubcategoryPicker";
 import Chip from "./Chip";
@@ -17,12 +11,30 @@ import Input from "./Input";
 import MediaPreview from "./MediaPreview";
 import SectionHeader from "./SectionHeader";
 
+function uniqueByNormalizedName(values) {
+  const seen = new Set();
+  const result = [];
+
+  for (const value of values ?? []) {
+    const name = String(value ?? "").trim();
+    const normalized = normalizeStyleName(name);
+    if (!name || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(name);
+  }
+
+  return result;
+}
+
 export default function WardrobeItemForm({
   draft,
   onChange,
   catalogs,
   categories,
   colorOptions,
+  seasonOptions,
+  styleOptions,
+  statusOptions,
   draftImages,
   catalogProcessingStatus,
   catalogErrorMessage,
@@ -30,14 +42,46 @@ export default function WardrobeItemForm({
   onEditMask,
   onEnhancePhoto,
   enhanceBusy = false,
+  onTitleFocus,
+  onTitleBlur,
 }) {
   const { colors, typography, spacing, radius } = useAppTheme();
   const colorOptionsById = useMemo(() => buildColorOptionMap(colorOptions), [colorOptions]);
+
+  const selectedCustomStyles = useMemo(
+    () =>
+      uniqueByNormalizedName(draft.styles ?? []).filter(
+        (style) => !styleOptions.some((availableStyle) => normalizeStyleName(availableStyle) === normalizeStyleName(style))
+      ),
+    [draft.styles, styleOptions]
+  );
 
   const toggleArrayValue = (field, value) => {
     const current = draft[field] ?? [];
     const next = current.includes(value) ? current.filter((entry) => entry !== value) : [...current, value];
     onChange({ ...draft, [field]: next });
+  };
+
+  const toggleStyle = (styleName) => {
+    const normalized = normalizeStyleName(styleName);
+    const currentStyles = uniqueByNormalizedName(draft.styles ?? []);
+    const nextStyles = currentStyles.some((style) => normalizeStyleName(style) === normalized)
+      ? currentStyles.filter((style) => normalizeStyleName(style) !== normalized)
+      : [...currentStyles, styleName];
+
+    onChange({
+      ...draft,
+      styles: nextStyles,
+      tags: nextStyles,
+    });
+  };
+
+  const commitTypedStyle = () => {
+    if (!draft.styleInput) {
+      return;
+    }
+    const nextDraft = finalizeDraftStyleInput(draft, styleOptions);
+    onChange(nextDraft);
   };
 
   const toggleColor = (colorId) => {
@@ -132,6 +176,8 @@ export default function WardrobeItemForm({
         <Input
           value={draft.title}
           onChangeText={(value) => setField("title", value)}
+          onFocus={onTitleFocus}
+          onBlur={onTitleBlur}
           placeholder="Например, белая рубашка"
           style={{ marginTop: 6 }}
         />
@@ -173,7 +219,7 @@ export default function WardrobeItemForm({
         </View>
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Сезон</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {WARDROBE_SEASONS.map((season) => (
+          {seasonOptions.map((season) => (
             <Chip
               key={season}
               label={season}
@@ -184,41 +230,36 @@ export default function WardrobeItemForm({
         </View>
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Стиль</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {WARDROBE_STYLES.map((style) => (
+          {styleOptions.map((style) => (
             <Chip
               key={style}
               label={style}
-              selected={(draft.styles ?? []).includes(style)}
-              onPress={() => toggleArrayValue("styles", style)}
+              selected={(draft.styles ?? []).some((entry) => normalizeStyleName(entry) === normalizeStyleName(style))}
+              onPress={() => toggleStyle(style)}
             />
           ))}
+          {selectedCustomStyles.map((style) => (
+            <Chip key={style} label={style} selected onPress={() => toggleStyle(style)} />
+          ))}
         </View>
+        <Input
+          value={draft.styleInput ?? ""}
+          onChangeText={(value) => setField("styleInput", value)}
+          onSubmitEditing={commitTypedStyle}
+          onBlur={commitTypedStyle}
+          placeholder="Введите свой стиль"
+          style={{ marginTop: spacing.sm }}
+          returnKeyType="done"
+        />
       </View>
 
       <View style={{ marginTop: spacing.lg }}>
         <SectionHeader title="Детали" />
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.sm }]}>Бренд</Text>
         <Input value={draft.brand} onChangeText={(value) => setField("brand", value)} placeholder="Например, Zara" style={{ marginTop: 6 }} />
-        <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Размер</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {WARDROBE_SIZES.map((size) => (
-            <Chip key={size} label={size} selected={draft.size === size} onPress={() => setField("size", size)} />
-          ))}
-        </View>
-        <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Материал</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {WARDROBE_MATERIALS.map((material) => (
-            <Chip
-              key={material}
-              label={material}
-              selected={draft.material === material}
-              onPress={() => setField("material", material)}
-            />
-          ))}
-        </View>
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Статус</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-          {WARDROBE_STATUSES.map((status) => (
+          {statusOptions.map((status) => (
             <Chip
               key={status.id}
               label={status.title}

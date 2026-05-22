@@ -29,10 +29,7 @@ export default function CategorySubcategoryPicker({ draft, categories, onChange 
 
   const changeCategory = (categoryId) => {
     const nextCategory = categories.find((category) => category.id === categoryId);
-    const nextSubcategory =
-      nextCategory?.subcategories?.includes(draft.subcategory)
-        ? draft.subcategory
-        : "";
+    const nextSubcategory = nextCategory?.subcategories?.includes(draft.subcategory) ? draft.subcategory : "";
     setDraft({
       categoryId,
       subcategory: nextSubcategory,
@@ -49,28 +46,13 @@ export default function CategorySubcategoryPicker({ draft, categories, onChange 
 
   return (
     <View>
-      <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Категория</Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-        {categories.map((category) => (
-          <Chip
-            key={category.id}
-            label={category.title}
-            selected={draft.categoryId === category.id}
-            onPress={() => changeCategory(category.id)}
-          />
-        ))}
-      </View>
-
       {suggestions.length ? (
         <View style={{ marginTop: spacing.md }}>
           <Text style={[typography.meta, { color: colors.secondaryText }]}>Предложено AI</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
             {suggestions.map((suggestion, index) => {
-              const categoryTitle =
-                categories.find((category) => category.id === suggestion.categoryId)?.title;
-              const isSelected =
-                draft.categoryId === suggestion.categoryId &&
-                draft.subcategory === suggestion.subcategory;
+              const categoryTitle = categories.find((category) => category.id === suggestion.categoryId)?.title;
+              const isSelected = draft.categoryId === suggestion.categoryId && draft.subcategory === suggestion.subcategory;
               return (
                 <Chip
                   key={`${suggestion.subcategoryId ?? suggestion.subcategoryKey ?? suggestion.subcategory}_${index}`}
@@ -83,6 +65,18 @@ export default function CategorySubcategoryPicker({ draft, categories, onChange 
           </View>
         </View>
       ) : null}
+
+      <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Категория</Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+        {categories.map((category) => (
+          <Chip
+            key={category.id}
+            label={category.title}
+            selected={draft.categoryId === category.id}
+            onPress={() => changeCategory(category.id)}
+          />
+        ))}
+      </View>
 
       <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Подкатегория</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>

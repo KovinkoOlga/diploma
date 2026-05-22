@@ -3,7 +3,6 @@ import { Alert, FlatList, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 import { Routes } from "../navigation/routes";
 import {
-  WARDROBE_SEASONS,
   applyWardrobeFilters,
   createEmptyWardrobeFilters,
   getOutfitCountMap,
@@ -28,6 +27,9 @@ export default function WardrobeCollectionView({
   catalogs,
   categories,
   colorOptions,
+  seasonOptions = [],
+  styleOptions = [],
+  statusOptions = [],
   outfits,
   actions,
   title,
@@ -61,7 +63,10 @@ export default function WardrobeCollectionView({
     () => applyWardrobeFilters(items, fixedFilters, outfitCountMap),
     [fixedFilters, items, outfitCountMap]
   );
-  const filterOptions = useMemo(() => getWardrobeFilterOptions(scopedItems, colorOptions), [colorOptions, scopedItems]);
+  const filterOptions = useMemo(
+    () => getWardrobeFilterOptions(scopedItems, colorOptions, { seasonOptions, styleOptions, statusOptions }),
+    [colorOptions, scopedItems, seasonOptions, statusOptions, styleOptions]
+  );
   const mergedItems = useMemo(() => {
     const filteredByControls = applyWardrobeFilters(scopedItems, filters, outfitCountMap).filter((item) =>
       matchesWardrobeSearch(item, query, categories, catalogs)
@@ -85,6 +90,7 @@ export default function WardrobeCollectionView({
     () => Object.fromEntries(categories.map((category) => [category.id, category])),
     [categories]
   );
+  const targetCatalogId = Array.isArray(fixedFilters.catalogId) ? fixedFilters.catalogId[0] : fixedFilters.catalogId;
 
   const toggleSelect = (itemId) => {
     setSelectedIds((current) =>
@@ -130,7 +136,7 @@ export default function WardrobeCollectionView({
     if (!selectedIds.length) return;
 
     if (bulkMode === "season" && bulkValue) {
-      actions.bulkUpdateItems(selectedIds, { seasons: [bulkValue], season: [bulkValue] });
+      actions.bulkUpdateItems(selectedIds, { seasons: [bulkValue] });
     }
 
     if (bulkMode === "catalog" && bulkValue) {
@@ -222,20 +228,12 @@ export default function WardrobeCollectionView({
               category={categoryById[item.categoryId]}
               selectionMode={selectionMode}
               selected={selectedIds.includes(item.id)}
-              showActions
               onPress={() =>
                 selectionMode
                   ? toggleSelect(item.id)
                   : navigation.navigate(Routes.ItemDetails, { itemId: item.id })
               }
               onLongPress={() => enterSelectionMode(item.id)}
-              onAddToOutfit={() =>
-                navigation.navigate("OutfitsTab", {
-                  screen: Routes.OutfitEditor,
-                  params: { seedItemId: item.id },
-                })
-              }
-              onDelete={() => confirmDelete([item.id])}
             />
           </View>
         )}
@@ -245,11 +243,11 @@ export default function WardrobeCollectionView({
             title={emptyStateTitle}
             subtitle={emptyStateSubtitle}
             actionLabel="Добавить вещь"
-            onAction={() => navigation.navigate(Routes.AddItem)}
+            onAction={() => navigation.navigate(Routes.AddItem, targetCatalogId ? { catalogId: targetCatalogId } : undefined)}
           />
         }
       />
-      {showFab ? <FAB onPress={() => navigation.navigate(Routes.AddItem)} style={{ bottom: 72 }} /> : null}
+      {showFab ? <FAB onPress={() => navigation.navigate(Routes.AddItem, targetCatalogId ? { catalogId: targetCatalogId } : undefined)} style={{ bottom: 72 }} /> : null}
 
       <WardrobeFiltersSheet
         visible={filterVisible}
@@ -282,7 +280,7 @@ export default function WardrobeCollectionView({
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {((bulkMode === "catalog" || bulkMode === "restoreCatalog")
             ? catalogs.map((catalog) => ({ id: catalog.id, title: catalog.title }))
-            : WARDROBE_SEASONS.map((season) => ({ id: season, title: season }))
+            : seasonOptions.map((season) => ({ id: season, title: season }))
           ).map((option) => (
             <Chip key={option.id} label={option.title} selected={bulkValue === option.id} onPress={() => setBulkValue(option.id)} />
           ))}

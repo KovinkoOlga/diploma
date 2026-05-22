@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 export default function SegmentedControl({ options, value, onChange }) {
-  const { colors, spacing, typography, radius } = useAppTheme();
+  const { colors, typography, radius } = useAppTheme();
 
   return (
     <View
@@ -27,12 +27,12 @@ export default function SegmentedControl({ options, value, onChange }) {
               styles.tab,
               {
                 opacity: pressed ? 0.85 : 1,
-                backgroundColor: selected ? colors.card : "transparent",
+                backgroundColor: selected ? colors.text : "transparent",
                 borderRadius: radius.pill,
               },
             ]}
           >
-            <Text style={[typography.caption, { color: selected ? colors.text : colors.mutedText }]}>
+            <Text style={[typography.caption, { color: selected ? colors.background : colors.mutedText }]}>
               {opt.label}
             </Text>
           </Pressable>

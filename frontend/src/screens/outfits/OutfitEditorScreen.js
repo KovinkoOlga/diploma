@@ -18,12 +18,11 @@ import {
 } from "../../utils/outfitCover";
 import { preloadOutfitCoverImages } from "../../utils/preloadOutfitImages";
 
-const seasonOptions = ["весна", "лето", "осень", "зима"];
 const tagOptions = ["casual", "office", "sport", "classic", "warm", "evening"];
 
 export default function OutfitEditorScreen({ navigation, route }) {
   const { colors, typography, spacing, radius } = useAppTheme();
-  const { outfits, items, outfitDraftSessions, actions } = useWardrobe();
+  const { outfits, items, seasonOptions, outfitDraftSessions, actions } = useWardrobe();
   const existing = useMemo(
     () => outfits.find((entry) => entry.id === route.params?.outfitId),
     [outfits, route.params?.outfitId]

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
-from sqlalchemy import delete, func, insert, or_, select, update
+from sqlalchemy import and_, delete, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 from PIL import Image, ImageDraw, ImageOps
 
@@ -19,7 +19,6 @@ from app.db.metadata import (
     item_styles,
     outfit_items,
     seasons,
-    sizes,
     styles,
     subcategories,
     wardrobe_catalogs,
@@ -42,6 +41,10 @@ from app.modules.wardrobe.schemas import (
     CatalogResponse,
     CategoryResponse,
     ColorResponse,
+    DictionariesResponse,
+    DictionaryBrandResponse,
+    DictionaryStyleResponse,
+    DictionarySubcategoryResponse,
     DraftImageAsset,
     DraftImagesResponse,
     DraftResponse,
@@ -63,6 +66,7 @@ CATALOG_READY_STATUS = "ready"
 CATALOG_FAILED_STATUS = "failed"
 VALID_MASK_ROTATIONS = {0, 90, 180, 270}
 MASK_EDITOR_MAX_SIZE = 1024
+STYLE_SEPARATOR_PATTERN = r"\s*[_/\\-]+\s*"
 
 
 def normalize_name(value: str) -> str:
@@ -70,13 +74,28 @@ def normalize_name(value: str) -> str:
     import unicodedata
 
     normalized = unicodedata.normalize("NFC", str(value or "")).strip()
-    normalized = re.sub(r"\s*[_/\\-]+\s*", " ", normalized)
+    normalized = re.sub(STYLE_SEPARATOR_PATTERN, " ", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized.lower().strip()
 
 
 def _csv(values: list[str] | None) -> list[str]:
     return [value for value in (values or []) if value]
+
+
+def _clean_names(values: list[str] | None) -> list[str]:
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for value in values or []:
+        name = str(value or "").strip()
+        if not name:
+            continue
+        normalized = normalize_name(name)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned.append(name)
+    return cleaned
 
 
 def _color_response(row: dict[str, Any]) -> ColorResponse:
@@ -143,6 +162,10 @@ async def _season_ids_by_names(connection: AsyncConnection, names: list[str]) ->
     return [row["id"] for row in rows]
 
 
+async def _season_names(connection: AsyncConnection) -> list[str]:
+    return list((await connection.execute(select(seasons.c.name).order_by(seasons.c.sort_order, seasons.c.name))).scalars().all())
+
+
 def _build_item_color_rows(color_ids: list[str], color_prediction: dict[str, Any] | None) -> list[dict[str, Any]]:
     prediction_by_id = {
         str(entry.get("id")): entry
@@ -175,13 +198,12 @@ def _build_item_color_rows(color_ids: list[str], color_prediction: dict[str, Any
 def _merge_item_attributes(
     current_attributes: dict[str, Any] | None,
     *,
-    material: str,
     category_prediction: dict[str, Any] | None,
     color_prediction: dict[str, Any] | None,
     preserve_existing_ml: bool = True,
 ) -> dict[str, Any]:
     attributes = dict(current_attributes or {})
-    attributes["material"] = material.strip()
+    attributes.pop("material", None)
 
     existing_ml = attributes.get("ml") if isinstance(attributes.get("ml"), dict) else {}
     ml_payload = dict(existing_ml) if preserve_existing_ml else {}
@@ -208,6 +230,169 @@ def _ordered_unique_subcategory_names(entries: list[dict[str, Any]]) -> list[str
         seen.add(name)
         names.append(name)
     return names
+
+
+def _ordered_unique_style_names(rows: list[dict[str, Any]]) -> list[str]:
+    seen: set[str] = set()
+    names: list[str] = []
+    for row in rows:
+        name = str(row["name"] or "").strip()
+        normalized = str(row.get("normalized_name") or normalize_name(name))
+        if not name or normalized in seen:
+            continue
+        seen.add(normalized)
+        names.append(name)
+    return names
+
+
+def _catalog_response(row: dict[str, Any]) -> CatalogResponse:
+    return CatalogResponse(
+        id=row["id"],
+        title=row["name"],
+        sortOrder=row["sort_order"],
+        isDefault=row["is_default"],
+    )
+
+
+def _dictionary_subcategory_response(row: dict[str, Any]) -> DictionarySubcategoryResponse:
+    return DictionarySubcategoryResponse(
+        id=row["id"],
+        name=row["name"],
+        categoryId=row["category_id"],
+        categoryTitle=row["category_name"],
+        isSystem=bool(row.get("is_system", False)),
+        itemCount=int(row.get("item_count") or 0),
+    )
+
+
+def _dictionary_style_response(row: dict[str, Any]) -> DictionaryStyleResponse:
+    return DictionaryStyleResponse(
+        id=row["id"],
+        name=row["name"],
+        isSystem=bool(row.get("is_system", False)),
+        itemCount=int(row.get("item_count") or 0),
+    )
+
+
+def _dictionary_brand_response(row: dict[str, Any]) -> DictionaryBrandResponse:
+    return DictionaryBrandResponse(
+        id=row["id"],
+        name=row["name"],
+        itemCount=int(row.get("item_count") or 0),
+    )
+
+
+async def _dictionary_subcategory_rows(connection: AsyncConnection, user_id: str) -> list[dict[str, Any]]:
+    rows = (
+        await connection.execute(
+            select(
+                subcategories.c.id,
+                subcategories.c.name,
+                subcategories.c.category_id,
+                categories.c.name.label("category_name"),
+                categories.c.sort_order.label("category_sort_order"),
+                subcategories.c.is_system,
+                func.count(wardrobe_items.c.id).label("item_count"),
+            )
+            .select_from(
+                subcategories.join(categories, subcategories.c.category_id == categories.c.id).outerjoin(
+                    wardrobe_items,
+                    and_(
+                        wardrobe_items.c.subcategory_id == subcategories.c.id,
+                        wardrobe_items.c.user_id == user_id,
+                    ),
+                )
+            )
+            .where(subcategories.c.user_id == user_id)
+            .group_by(
+                subcategories.c.id,
+                subcategories.c.name,
+                subcategories.c.category_id,
+                categories.c.name,
+                categories.c.sort_order,
+                subcategories.c.is_system,
+            )
+            .order_by(categories.c.sort_order, categories.c.name, subcategories.c.name)
+        )
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+async def _dictionary_style_rows(connection: AsyncConnection, user_id: str) -> list[dict[str, Any]]:
+    rows = (
+        await connection.execute(
+            select(
+                styles.c.id,
+                styles.c.name,
+                styles.c.is_system,
+                func.count(func.distinct(wardrobe_items.c.id)).label("item_count"),
+            )
+            .select_from(
+                styles.outerjoin(item_styles, item_styles.c.style_id == styles.c.id).outerjoin(
+                    wardrobe_items,
+                    and_(
+                        wardrobe_items.c.id == item_styles.c.item_id,
+                        wardrobe_items.c.user_id == user_id,
+                    ),
+                )
+            )
+            .where(styles.c.user_id == user_id)
+            .group_by(styles.c.id, styles.c.name, styles.c.is_system)
+            .order_by(styles.c.name)
+        )
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+async def _dictionary_brand_rows(connection: AsyncConnection, user_id: str) -> list[dict[str, Any]]:
+    rows = (
+        await connection.execute(
+            select(
+                brands.c.id,
+                brands.c.name,
+                func.count(wardrobe_items.c.id).label("item_count"),
+            )
+            .select_from(
+                brands.outerjoin(
+                    wardrobe_items,
+                    and_(
+                        wardrobe_items.c.brand_id == brands.c.id,
+                        wardrobe_items.c.user_id == user_id,
+                    ),
+                )
+            )
+            .where(brands.c.user_id == user_id)
+            .group_by(brands.c.id, brands.c.name)
+            .order_by(brands.c.name)
+        )
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+async def _dictionary_subcategory_entry(
+    connection: AsyncConnection, user_id: str, subcategory_id: str
+) -> DictionarySubcategoryResponse:
+    rows = await _dictionary_subcategory_rows(connection, user_id)
+    for row in rows:
+        if row["id"] == subcategory_id:
+            return _dictionary_subcategory_response(row)
+    raise LookupError("Subcategory not found")
+
+
+async def _dictionary_style_entry(connection: AsyncConnection, user_id: str, style_id: str) -> DictionaryStyleResponse:
+    rows = await _dictionary_style_rows(connection, user_id)
+    for row in rows:
+        if row["id"] == style_id:
+            return _dictionary_style_response(row)
+    raise LookupError("Style not found")
+
+
+async def _dictionary_brand_entry(connection: AsyncConnection, user_id: str, brand_id: str) -> DictionaryBrandResponse:
+    rows = await _dictionary_brand_rows(connection, user_id)
+    for row in rows:
+        if row["id"] == brand_id:
+            return _dictionary_brand_response(row)
+    raise LookupError("Brand not found")
 
 
 async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapResponse:
@@ -240,25 +425,20 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
 
     status_rows = (await connection.execute(select(item_statuses).order_by(item_statuses.c.sort_order))).mappings().all()
     color_options = await get_color_options(connection)
-    season_rows = (await connection.execute(select(seasons.c.name).order_by(seasons.c.sort_order))).scalars().all()
-    size_rows = (await connection.execute(select(sizes.c.name).order_by(sizes.c.id))).scalars().all()
+    season_rows = await _season_names(connection)
     style_rows = (
-        await connection.execute(select(styles.c.name).where(styles.c.is_system.is_(True)).order_by(styles.c.name))
-    ).scalars().all()
+        await connection.execute(
+            select(styles.c.name, styles.c.normalized_name, styles.c.is_system)
+            .where(or_(styles.c.is_system.is_(True), styles.c.user_id == user_id))
+            .order_by(styles.c.is_system.desc(), styles.c.name)
+        )
+    ).mappings().all()
     template_rows = (
         await connection.execute(select(wardrobe_item_templates).order_by(wardrobe_item_templates.c.sort_order))
     ).mappings().all()
 
     return BootstrapResponse(
-        catalogs=[
-            CatalogResponse(
-                id=row["id"],
-                title=row["name"],
-                sortOrder=row["sort_order"],
-                isDefault=row["is_default"],
-            )
-            for row in catalog_rows
-        ],
+        catalogs=[_catalog_response(dict(row)) for row in catalog_rows],
         categories=[
             CategoryResponse(
                 id=row["id"],
@@ -279,8 +459,7 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
         ],
         colorOptions=color_options,
         seasons=list(season_rows),
-        sizes=list(size_rows),
-        styles=list(style_rows),
+        styles=_ordered_unique_style_names([dict(row) for row in style_rows]),
         statuses=[StatusResponse(id=row["code"], title=row["name"]) for row in status_rows],
         templates=[
             TemplateResponse(
@@ -289,8 +468,6 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
                 categoryId=row["category_id"],
                 subcategory=row["subcategory_name"],
                 brand=row["brand"] or "",
-                size=row["size_name"] or "",
-                material=row["material"] or "",
                 colorIds=row["color_ids_json"] or [],
                 seasons=row["seasons_json"] or [],
                 styles=row["styles_json"] or [],
@@ -330,6 +507,201 @@ async def update_catalog(connection: AsyncConnection, user_id: str, catalog_id: 
     return CatalogResponse(id=row["id"], title=row["name"], sortOrder=row["sort_order"], isDefault=row["is_default"])
 
 
+async def get_dictionaries(connection: AsyncConnection, user_id: str) -> DictionariesResponse:
+    subcategory_rows = await _dictionary_subcategory_rows(connection, user_id)
+    style_rows = await _dictionary_style_rows(connection, user_id)
+    brand_rows = await _dictionary_brand_rows(connection, user_id)
+    return DictionariesResponse(
+        subcategories=[_dictionary_subcategory_response(row) for row in subcategory_rows],
+        styles=[_dictionary_style_response(row) for row in style_rows],
+        brands=[_dictionary_brand_response(row) for row in brand_rows],
+    )
+
+
+async def rename_subcategory(
+    connection: AsyncConnection,
+    user_id: str,
+    subcategory_id: str,
+    name: str,
+) -> DictionarySubcategoryResponse:
+    row = (
+        await connection.execute(
+            select(subcategories.c.id, subcategories.c.category_id, subcategories.c.is_system, subcategories.c.user_id).where(
+                subcategories.c.id == subcategory_id
+            )
+        )
+    ).mappings().first()
+    if row is None:
+        raise LookupError("Subcategory not found")
+    if row["user_id"] != user_id or row["is_system"]:
+        raise PermissionError("System subcategory cannot be edited")
+
+    clean_name = str(name or "").strip()
+    if not clean_name:
+        raise ValueError("Подкатегория не может быть пустой")
+    normalized = normalize_name(clean_name)
+    conflict = (
+        await connection.execute(
+            select(subcategories.c.id).where(
+                subcategories.c.id != subcategory_id,
+                subcategories.c.category_id == row["category_id"],
+                subcategories.c.normalized_name == normalized,
+                or_(subcategories.c.user_id == user_id, subcategories.c.user_id.is_(None)),
+            )
+        )
+    ).first()
+    if conflict is not None:
+        raise ValueError("Подкатегория уже существует")
+
+    await connection.execute(
+        update(subcategories)
+        .where(subcategories.c.id == subcategory_id, subcategories.c.user_id == user_id)
+        .values(name=clean_name, normalized_name=normalized)
+    )
+    return await _dictionary_subcategory_entry(connection, user_id, subcategory_id)
+
+
+async def delete_subcategory(connection: AsyncConnection, user_id: str, subcategory_id: str) -> None:
+    row = (
+        await connection.execute(
+            select(subcategories.c.id, subcategories.c.is_system, subcategories.c.user_id).where(subcategories.c.id == subcategory_id)
+        )
+    ).mappings().first()
+    if row is None:
+        raise LookupError("Subcategory not found")
+    if row["user_id"] != user_id or row["is_system"]:
+        raise PermissionError("System subcategory cannot be deleted")
+
+    usage_count = (
+        await connection.execute(
+            select(func.count())
+            .select_from(wardrobe_items)
+            .where(
+                wardrobe_items.c.user_id == user_id,
+                wardrobe_items.c.subcategory_id == subcategory_id,
+            )
+        )
+    ).scalar_one()
+    if usage_count:
+        raise ValueError("Подкатегория используется в вещах")
+
+    await connection.execute(
+        delete(subcategories).where(subcategories.c.id == subcategory_id, subcategories.c.user_id == user_id)
+    )
+
+
+async def rename_style(connection: AsyncConnection, user_id: str, style_id: str, name: str) -> DictionaryStyleResponse:
+    row = (
+        await connection.execute(select(styles.c.id, styles.c.user_id, styles.c.is_system).where(styles.c.id == style_id))
+    ).mappings().first()
+    if row is None:
+        raise LookupError("Style not found")
+    if row["user_id"] != user_id or row["is_system"]:
+        raise PermissionError("System style cannot be edited")
+
+    clean_name = str(name or "").strip()
+    if not clean_name:
+        raise ValueError("Стиль не может быть пустым")
+    normalized = normalize_name(clean_name)
+    conflict = (
+        await connection.execute(
+            select(styles.c.id).where(
+                styles.c.id != style_id,
+                styles.c.normalized_name == normalized,
+                or_(styles.c.is_system.is_(True), styles.c.user_id == user_id),
+            )
+        )
+    ).first()
+    if conflict is not None:
+        raise ValueError("Стиль уже существует")
+
+    await connection.execute(
+        update(styles).where(styles.c.id == style_id, styles.c.user_id == user_id).values(name=clean_name, normalized_name=normalized)
+    )
+    return await _dictionary_style_entry(connection, user_id, style_id)
+
+
+async def delete_style(connection: AsyncConnection, user_id: str, style_id: str) -> None:
+    row = (
+        await connection.execute(select(styles.c.id, styles.c.user_id, styles.c.is_system).where(styles.c.id == style_id))
+    ).mappings().first()
+    if row is None:
+        raise LookupError("Style not found")
+    if row["user_id"] != user_id or row["is_system"]:
+        raise PermissionError("System style cannot be deleted")
+
+    usage_count = (
+        await connection.execute(
+            select(func.count(func.distinct(wardrobe_items.c.id)))
+            .select_from(item_styles.join(wardrobe_items, wardrobe_items.c.id == item_styles.c.item_id))
+            .where(
+                item_styles.c.style_id == style_id,
+                wardrobe_items.c.user_id == user_id,
+            )
+        )
+    ).scalar_one()
+    if usage_count:
+        raise ValueError("Стиль используется в вещах")
+
+    await connection.execute(delete(styles).where(styles.c.id == style_id, styles.c.user_id == user_id))
+
+
+async def rename_brand(connection: AsyncConnection, user_id: str, brand_id: str, name: str) -> DictionaryBrandResponse:
+    row = (
+        await connection.execute(select(brands.c.id, brands.c.user_id).where(brands.c.id == brand_id))
+    ).mappings().first()
+    if row is None:
+        raise LookupError("Brand not found")
+    if row["user_id"] != user_id:
+        raise LookupError("Brand not found")
+
+    clean_name = str(name or "").strip()
+    if not clean_name:
+        raise ValueError("Бренд не может быть пустым")
+    normalized = normalize_name(clean_name)
+    conflict = (
+        await connection.execute(
+            select(brands.c.id).where(
+                brands.c.id != brand_id,
+                brands.c.user_id == user_id,
+                brands.c.normalized_name == normalized,
+            )
+        )
+    ).first()
+    if conflict is not None:
+        raise ValueError("Бренд уже существует")
+
+    await connection.execute(
+        update(brands).where(brands.c.id == brand_id, brands.c.user_id == user_id).values(name=clean_name, normalized_name=normalized)
+    )
+    return await _dictionary_brand_entry(connection, user_id, brand_id)
+
+
+async def delete_brand(connection: AsyncConnection, user_id: str, brand_id: str) -> None:
+    row = (
+        await connection.execute(select(brands.c.id, brands.c.user_id).where(brands.c.id == brand_id))
+    ).mappings().first()
+    if row is None:
+        raise LookupError("Brand not found")
+    if row["user_id"] != user_id:
+        raise LookupError("Brand not found")
+
+    usage_count = (
+        await connection.execute(
+            select(func.count())
+            .select_from(wardrobe_items)
+            .where(
+                wardrobe_items.c.user_id == user_id,
+                wardrobe_items.c.brand_id == brand_id,
+            )
+        )
+    ).scalar_one()
+    if usage_count:
+        raise ValueError("Бренд используется в вещах")
+
+    await connection.execute(delete(brands).where(brands.c.id == brand_id, brands.c.user_id == user_id))
+
+
 async def _status_id(connection: AsyncConnection, code: str) -> str:
     row = (await connection.execute(select(item_statuses.c.id).where(item_statuses.c.code == code))).first()
     if row is None:
@@ -350,14 +722,6 @@ async def _ensure_brand(connection: AsyncConnection, user_id: str, name: str) ->
     brand_id = new_id("brand")
     await connection.execute(insert(brands).values(id=brand_id, user_id=user_id, name=name, normalized_name=normalized))
     return brand_id
-
-
-async def _size_id(connection: AsyncConnection, name: str) -> str | None:
-    name = name.strip()
-    if not name:
-        return None
-    row = (await connection.execute(select(sizes.c.id).where(sizes.c.name == name))).first()
-    return row[0] if row else None
 
 
 async def _ensure_subcategory(connection: AsyncConnection, user_id: str, category_id: str, name: str) -> str | None:
@@ -390,22 +754,53 @@ async def _ensure_subcategory(connection: AsyncConnection, user_id: str, categor
     return subcategory_id
 
 
-async def _ids_by_names(connection: AsyncConnection, table, names: list[str]) -> list[str]:
-    if not names:
+async def _ensure_style_ids(connection: AsyncConnection, user_id: str, names: list[str]) -> list[str]:
+    cleaned_names = _clean_names(names)
+    if not cleaned_names:
         return []
-    rows = (await connection.execute(select(table.c.id, table.c.name).where(table.c.name.in_(names)))).mappings().all()
-    return [row["id"] for row in rows]
 
+    normalized_names = [normalize_name(name) for name in cleaned_names]
+    existing_rows = (
+        await connection.execute(
+            select(styles.c.id, styles.c.name, styles.c.normalized_name, styles.c.is_system)
+            .where(
+                styles.c.normalized_name.in_(normalized_names),
+                or_(styles.c.is_system.is_(True), styles.c.user_id == user_id),
+            )
+            .order_by(styles.c.is_system.desc(), styles.c.name)
+        )
+    ).mappings().all()
 
-async def _style_ids_by_names(connection: AsyncConnection, names: list[str]) -> list[str]:
-    if not names:
-        return []
-    rows = (await connection.execute(select(styles.c.id, styles.c.name).where(styles.c.name.in_(names)))).mappings().all()
-    return [row["id"] for row in rows]
+    existing_by_normalized: dict[str, str] = {}
+    for row in existing_rows:
+        existing_by_normalized.setdefault(str(row["normalized_name"]), str(row["id"]))
+
+    resolved_ids: list[str] = []
+    for name, normalized in zip(cleaned_names, normalized_names, strict=False):
+        existing_id = existing_by_normalized.get(normalized)
+        if existing_id is not None:
+            resolved_ids.append(existing_id)
+            continue
+
+        style_id = new_id("style")
+        await connection.execute(
+            insert(styles).values(
+                id=style_id,
+                user_id=user_id,
+                name=name,
+                normalized_name=normalized,
+                is_system=False,
+            )
+        )
+        existing_by_normalized[normalized] = style_id
+        resolved_ids.append(style_id)
+
+    return resolved_ids
 
 
 async def _replace_item_links(
     connection: AsyncConnection,
+    user_id: str,
     item_id: str,
     color_ids: list[str] | None,
     season_names: list[str],
@@ -431,8 +826,8 @@ async def _replace_item_links(
     if replace_styles:
         await connection.execute(delete(item_styles).where(item_styles.c.item_id == item_id))
 
-    season_ids = await _season_ids_by_names(connection, season_names) if replace_seasons else []
-    style_ids = await _style_ids_by_names(connection, style_names) if replace_styles else []
+    season_ids = await _season_ids_by_names(connection, _clean_names(season_names)) if replace_seasons else []
+    style_ids = await _ensure_style_ids(connection, user_id, style_names) if replace_styles else []
     if replace_seasons and season_ids:
         await connection.execute(
             insert(item_seasons),
@@ -472,6 +867,7 @@ async def _item_links(connection: AsyncConnection, item_id: str) -> tuple[list[C
             select(seasons.c.name)
             .select_from(item_seasons.join(seasons, item_seasons.c.season_id == seasons.c.id))
             .where(item_seasons.c.item_id == item_id)
+            .order_by(seasons.c.sort_order, seasons.c.name)
         )
     ).scalars().all()
     style_rows = (
@@ -479,6 +875,7 @@ async def _item_links(connection: AsyncConnection, item_id: str) -> tuple[list[C
             select(styles.c.name)
             .select_from(item_styles.join(styles, item_styles.c.style_id == styles.c.id))
             .where(item_styles.c.item_id == item_id)
+            .order_by(styles.c.is_system.desc(), styles.c.name)
         )
     ).scalars().all()
     return [_color_response(dict(row)) for row in color_rows], list(season_rows), list(style_rows)
@@ -492,7 +889,6 @@ async def serialize_item(connection: AsyncConnection, row: dict) -> ItemResponse
     image_url = await get_file_url(connection, row.get("primary_image_file_id"), "card")
     created_at = row["created_at"]
     created = created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)
-    material = (row.get("attributes_json") or {}).get("material", "")
     status = row["status_code"]
     return ItemResponse(
         id=row["id"],
@@ -503,8 +899,6 @@ async def serialize_item(connection: AsyncConnection, row: dict) -> ItemResponse
         colorIds=[color.id for color in color_details],
         colorDetails=color_details,
         brand=row.get("brand_name") or "",
-        size=row.get("size_name") or "",
-        material=material,
         seasons=season_names,
         season=season_names,
         styles=style_names,
@@ -526,13 +920,11 @@ def _base_item_select():
             wardrobe_items,
             item_statuses.c.code.label("status_code"),
             brands.c.name.label("brand_name"),
-            sizes.c.name.label("size_name"),
             subcategories.c.name.label("subcategory_name"),
         )
         .select_from(
             wardrobe_items.join(item_statuses, wardrobe_items.c.status_id == item_statuses.c.id)
             .outerjoin(brands, wardrobe_items.c.brand_id == brands.c.id)
-            .outerjoin(sizes, wardrobe_items.c.size_id == sizes.c.id)
             .outerjoin(subcategories, wardrobe_items.c.subcategory_id == subcategories.c.id)
         )
     )
@@ -588,10 +980,6 @@ async def list_items(connection: AsyncConnection, user_id: str, params: dict[str
             continue
         if not has_any(item.brand, params.get("brand") or []):
             continue
-        if not has_any(item.size, params.get("size") or []):
-            continue
-        if not has_any(item.material, params.get("material") or []):
-            continue
         if not has_any(item.status, params.get("status") or []):
             continue
         participation = params.get("outfitParticipation")
@@ -606,8 +994,6 @@ async def list_items(connection: AsyncConnection, user_id: str, params: dict[str
                         item.title,
                         item.subcategory,
                         item.brand,
-                        item.size,
-                        item.material,
                         item.status,
                         *[color.name for color in item.colorDetails],
                         *[color.parentName for color in item.colorDetails if color.parentName],
@@ -647,11 +1033,9 @@ async def create_item(connection: AsyncConnection, user_id: str, payload: ItemPa
         "status_id": await _status_id(connection, payload.status),
         "name": payload.title.strip(),
         "brand_id": await _ensure_brand(connection, user_id, payload.brand),
-        "size_id": await _size_id(connection, payload.size),
         "notes": payload.notes,
         "attributes_json": _merge_item_attributes(
             None,
-            material=payload.material,
             category_prediction=payload.categoryPrediction,
             color_prediction=payload.colorPrediction,
             preserve_existing_ml=False,
@@ -660,6 +1044,7 @@ async def create_item(connection: AsyncConnection, user_id: str, payload: ItemPa
     await connection.execute(insert(wardrobe_items).values(values))
     await _replace_item_links(
         connection,
+        user_id,
         item_id,
         normalize_color_ids(payload.colorIds),
         _csv(payload.seasons),
@@ -687,8 +1072,6 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
         subcategory=payload.subcategory if payload.subcategory is not None else current.subcategory,
         colorIds=payload.colorIds if payload.colorIds is not None else current.colorIds,
         brand=payload.brand if payload.brand is not None else current.brand,
-        size=payload.size if payload.size is not None else current.size,
-        material=payload.material if payload.material is not None else current.material,
         seasons=payload.seasons if payload.seasons is not None else current.seasons,
         styles=payload.styles if payload.styles is not None else current.styles,
         status=payload.status if payload.status is not None else current.status,
@@ -708,11 +1091,9 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
             status_id=await _status_id(connection, merged.status),
             name=merged.title.strip(),
             brand_id=await _ensure_brand(connection, user_id, merged.brand),
-            size_id=await _size_id(connection, merged.size),
             notes=merged.notes,
             attributes_json=_merge_item_attributes(
                 current_attributes,
-                material=merged.material,
                 category_prediction=payload.categoryPrediction,
                 color_prediction=payload.colorPrediction,
             ),
@@ -721,6 +1102,7 @@ async def patch_item(connection: AsyncConnection, user_id: str, item_id: str, pa
     )
     await _replace_item_links(
         connection,
+        user_id,
         item_id,
         normalize_color_ids(merged.colorIds),
         _csv(merged.seasons),
@@ -737,18 +1119,22 @@ async def delete_item(connection: AsyncConnection, user_id: str, item_id: str) -
     await connection.execute(delete(wardrobe_items).where(wardrobe_items.c.id == item_id, wardrobe_items.c.user_id == user_id))
 
 
-def _default_draft_payload(template: dict, source_type: str, catalog_id: str, file_id: str | None = None) -> dict:
+async def _default_draft_payload(
+    connection: AsyncConnection,
+    template: dict,
+    source_type: str,
+    catalog_id: str,
+    file_id: str | None = None,
+) -> dict:
     return {
-        "title": template["name"],
+        "title": "",
         "catalogId": catalog_id,
         "categoryId": template["category_id"],
         "subcategory": template["subcategory_name"],
         "colorIds": template["color_ids_json"] or [],
         "brand": template["brand"] or "",
-        "size": template["size_name"] or "",
-        "material": template["material"] or "",
-        "seasons": template["seasons_json"] or [],
-        "styles": template["styles_json"] or [],
+        "seasons": await _season_names(connection),
+        "styles": [],
         "status": "active",
         "notes": "",
         "sourceType": source_type,
@@ -773,6 +1159,8 @@ async def _load_draft_row(connection: AsyncConnection, user_id: str, draft_id: s
 
 async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftResponse:
     payload = dict(row.get("suggested_payload_json") or {})
+    payload.pop("size", None)
+    payload.pop("material", None)
     original_url = await get_file_url(connection, row.get("original_file_id"), "original")
     if original_url is None:
         original_url = await get_file_url(connection, row.get("original_file_id"), "card")
@@ -970,7 +1358,7 @@ async def create_draft(
     if source_type in {"photo", "gallery"} and file_id is None:
         raise ValueError("Original image is required for photo drafts")
 
-    draft_payload = _default_draft_payload(dict(template), source_type, catalog_id, file_id)
+    draft_payload = await _default_draft_payload(connection, dict(template), source_type, catalog_id, file_id)
     is_catalog_source = source_type == "catalog"
     draft_id = new_id("draft")
     await connection.execute(

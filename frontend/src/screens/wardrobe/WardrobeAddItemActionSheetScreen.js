@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { Routes } from "../../navigation/routes";
+import { WARDROBE_PHOTO_MODES, openWardrobePhotoFlow } from "../../utils/wardrobePhotoFlow";
 
 function OptionRow({ icon, title, onPress }) {
   const { colors, typography, spacing, radius } = useAppTheme();
@@ -42,8 +43,9 @@ function OptionRow({ icon, title, onPress }) {
   );
 }
 
-export default function WardrobeAddItemActionSheetScreen({ navigation }) {
+export default function WardrobeAddItemActionSheetScreen({ navigation, route }) {
   const { colors, spacing, radius } = useAppTheme();
+  const catalogId = route.params?.catalogId;
 
   return (
     <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,17,17,0.34)" }}>
@@ -60,17 +62,17 @@ export default function WardrobeAddItemActionSheetScreen({ navigation }) {
         <OptionRow
           icon="camera-outline"
           title="Сфотографировать вещь"
-          onPress={() => navigation.replace(Routes.WardrobeAddFromPhoto)}
+          onPress={() => openWardrobePhotoFlow({ navigation, mode: WARDROBE_PHOTO_MODES.camera, catalogId, replace: true })}
         />
         <OptionRow
           icon="image-outline"
           title="Загрузить из галереи"
-          onPress={() => navigation.replace(Routes.WardrobeAddFromGallery)}
+          onPress={() => openWardrobePhotoFlow({ navigation, mode: WARDROBE_PHOTO_MODES.gallery, catalogId, replace: true })}
         />
         <OptionRow
           icon="grid-outline"
           title="Выбрать из базового каталога"
-          onPress={() => navigation.replace(Routes.WardrobeAddFromCatalog)}
+          onPress={() => navigation.replace(Routes.WardrobeAddFromCatalog, catalogId ? { catalogId } : undefined)}
         />
       </View>
     </View>

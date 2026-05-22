@@ -7,6 +7,7 @@ export const Routes = {
   WardrobeCategory: "WardrobeCategory",
   WardrobeItemDetails: "WardrobeItemDetails",
   WardrobeAddItemMenu: "WardrobeAddItemMenu",
+  WardrobePhotoGuide: "WardrobePhotoGuide",
   WardrobeAddFromPhoto: "WardrobeAddFromPhoto",
   WardrobeAddFromGallery: "WardrobeAddFromGallery",
   WardrobeAddFromCatalog: "WardrobeAddFromCatalog",

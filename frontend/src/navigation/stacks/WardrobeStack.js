@@ -7,6 +7,7 @@ import WardrobeAllItemsScreen from "../../screens/wardrobe/WardrobeAllItemsScree
 import WardrobeCategoryScreen from "../../screens/wardrobe/WardrobeCategoryScreen";
 import WardrobeItemDetailsScreen from "../../screens/wardrobe/WardrobeItemDetailsScreen";
 import WardrobeAddItemActionSheetScreen from "../../screens/wardrobe/WardrobeAddItemActionSheetScreen";
+import WardrobePhotoGuideScreen from "../../screens/wardrobe/WardrobePhotoGuideScreen";
 import WardrobeAddFromPhotoScreen from "../../screens/wardrobe/WardrobeAddFromPhotoScreen";
 import WardrobeAddFromGalleryScreen from "../../screens/wardrobe/WardrobeAddFromGalleryScreen";
 import WardrobeAddFromCatalogScreen from "../../screens/wardrobe/WardrobeAddFromCatalogScreen";
@@ -49,13 +50,14 @@ export default function WardrobeStack() {
           contentStyle: { backgroundColor: "transparent" },
         }}
       />
+      <Stack.Screen name={Routes.WardrobePhotoGuide} component={WardrobePhotoGuideScreen} options={{ title: "Как лучше сфотографировать вещь" }} />
       <Stack.Screen name={Routes.WardrobeAddFromPhoto} component={WardrobeAddFromPhotoScreen} options={{ title: "Сфотографировать вещь" }} />
       <Stack.Screen name={Routes.WardrobeAddFromGallery} component={WardrobeAddFromGalleryScreen} options={{ title: "Загрузить из галереи" }} />
       <Stack.Screen name={Routes.WardrobeAddFromCatalog} component={WardrobeAddFromCatalogScreen} options={{ title: "Базовый каталог" }} />
       <Stack.Screen name={Routes.WardrobeProcessingStub} component={WardrobeProcessingStubScreen} options={{ title: "Обработка" }} />
       <Stack.Screen name={Routes.WardrobeConfirmItem} component={WardrobeConfirmItemScreen} options={{ title: "Подтверждение" }} />
       <Stack.Screen name={Routes.WardrobeMaskEditor} component={WardrobeMaskEditorScreen} options={{ title: "Редактор обрезки" }} />
-      <Stack.Screen name={Routes.WardrobeManageCatalogs} component={WardrobeManageCatalogsScreen} options={{ title: "Каталоги" }} />
+      <Stack.Screen name={Routes.WardrobeManageCatalogs} component={WardrobeManageCatalogsScreen} options={{ title: "Справочники" }} />
       <Stack.Screen name={Routes.WardrobeManageCategories} component={WardrobeManageCategoriesScreen} options={{ title: "Категории" }} />
       <Stack.Screen name={Routes.WardrobeArchive} component={WardrobeArchiveScreen} options={{ title: "Архив" }} />
     </Stack.Navigator>

@@ -127,13 +127,6 @@ export default function WardrobeFiltersSheet({
       />
       <FilterSection title="Стиль" options={options.styles} value={filters.style} onToggle={(value) => toggleArrayValue("style", value)} />
       <FilterSection title="Бренд" options={options.brands} value={filters.brand} onToggle={(value) => toggleArrayValue("brand", value)} />
-      <FilterSection title="Размер" options={options.sizes} value={filters.size} onToggle={(value) => toggleArrayValue("size", value)} />
-      <FilterSection
-        title="Материал"
-        options={options.materials}
-        value={filters.material}
-        onToggle={(value) => toggleArrayValue("material", value)}
-      />
       <FilterSection
         title="Статус"
         options={options.statuses}

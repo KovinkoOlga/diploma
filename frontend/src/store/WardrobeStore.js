@@ -23,6 +23,12 @@ export function WardrobeProvider({ children }) {
   const [catalogs, setCatalogs] = useState([]);
   const [categories, setCategories] = useState([]);
   const [colorOptions, setColorOptions] = useState([]);
+  const [seasonOptions, setSeasonOptions] = useState([]);
+  const [styleOptions, setStyleOptions] = useState([]);
+  const [statusOptions, setStatusOptions] = useState([]);
+  const [dictionarySubcategories, setDictionarySubcategories] = useState([]);
+  const [dictionaryStyles, setDictionaryStyles] = useState([]);
+  const [dictionaryBrands, setDictionaryBrands] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [outfits, setOutfits] = useState([]);
   const [outfitDraftSessions, setOutfitDraftSessions] = useState({});
@@ -36,8 +42,19 @@ export function WardrobeProvider({ children }) {
     setCatalogs(bootstrap.catalogs ?? []);
     setCategories(bootstrap.categories ?? []);
     setColorOptions(bootstrap.colorOptions ?? []);
+    setSeasonOptions(bootstrap.seasons ?? []);
+    setStyleOptions(bootstrap.styles ?? []);
+    setStatusOptions(bootstrap.statuses ?? []);
     setTemplates(bootstrap.templates ?? []);
     return bootstrap;
+  }, []);
+
+  const refreshDictionaries = useCallback(async () => {
+    const dictionaries = await wardrobeApi.fetchDictionaries();
+    setDictionarySubcategories(dictionaries.subcategories ?? []);
+    setDictionaryStyles(dictionaries.styles ?? []);
+    setDictionaryBrands(dictionaries.brands ?? []);
+    return dictionaries;
   }, []);
 
   const refreshItems = useCallback(async (filters = {}) => {
@@ -65,6 +82,7 @@ export function WardrobeProvider({ children }) {
     setError("");
     try {
       await refreshBootstrap();
+      await refreshDictionaries();
       await refreshItems();
       await refreshOutfits();
       await refreshContent();
@@ -73,7 +91,7 @@ export function WardrobeProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [refreshBootstrap, refreshContent, refreshItems, refreshOutfits]);
+  }, [refreshBootstrap, refreshContent, refreshDictionaries, refreshItems, refreshOutfits]);
 
   useEffect(() => {
     refreshAll();
@@ -83,6 +101,7 @@ export function WardrobeProvider({ children }) {
     () => ({
       refreshAll,
       refreshBootstrap,
+      refreshDictionaries,
       refreshItems,
       refreshOutfits,
       refreshContent,
@@ -90,7 +109,7 @@ export function WardrobeProvider({ children }) {
         const saved = await wardrobeApi.createItem(draft);
         animate();
         setItems((prev) => [saved, ...prev]);
-        await refreshBootstrap();
+        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
         return saved;
       },
       async updateItem(itemId, patch) {
@@ -98,7 +117,7 @@ export function WardrobeProvider({ children }) {
         const saved = await wardrobeApi.updateItem(itemId, fallbackPatchValue(patch, current));
         animate();
         setItems((prev) => prev.map((item) => (item.id === itemId ? saved : item)));
-        await refreshBootstrap();
+        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
         return saved;
       },
       async deleteItem(itemId) {
@@ -143,7 +162,7 @@ export function WardrobeProvider({ children }) {
         const savedById = Object.fromEntries(savedItems.map((item) => [item.id, item]));
         animate();
         setItems((prev) => prev.map((item) => savedById[item.id] ?? item));
-        await refreshBootstrap();
+        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
       },
       async addCatalog(title) {
         const catalog = await wardrobeApi.createCatalog(title.trim());
@@ -179,8 +198,35 @@ export function WardrobeProvider({ children }) {
         const saved = await wardrobeApi.confirmDraft(draftId, draft);
         animate();
         setItems((prev) => [saved, ...prev]);
-        await refreshBootstrap();
+        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
         return saved;
+      },
+      async renameSubcategory(subcategoryId, name) {
+        const entry = await wardrobeApi.updateSubcategory(subcategoryId, name.trim());
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems()]);
+        return entry;
+      },
+      async deleteSubcategory(subcategoryId) {
+        await wardrobeApi.deleteSubcategory(subcategoryId);
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems()]);
+      },
+      async renameStyle(styleId, name) {
+        const entry = await wardrobeApi.updateStyle(styleId, name.trim());
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems()]);
+        return entry;
+      },
+      async deleteStyle(styleId) {
+        await wardrobeApi.deleteStyle(styleId);
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems()]);
+      },
+      async renameBrand(brandId, name) {
+        const entry = await wardrobeApi.updateBrand(brandId, name.trim());
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems()]);
+        return entry;
+      },
+      async deleteBrand(brandId) {
+        await wardrobeApi.deleteBrand(brandId);
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems()]);
       },
       async upsertOutfit(outfitDraft) {
         const saved = outfitDraft.id
@@ -249,7 +295,7 @@ export function WardrobeProvider({ children }) {
         setFeedPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, saved: result.saved } : post)));
       },
     }),
-    [items, refreshAll, refreshBootstrap, refreshContent, refreshItems, refreshOutfits]
+    [items, refreshAll, refreshBootstrap, refreshContent, refreshDictionaries, refreshItems, refreshOutfits]
   );
 
   const value = useMemo(
@@ -258,6 +304,12 @@ export function WardrobeProvider({ children }) {
       catalogs,
       categories,
       colorOptions,
+      seasonOptions,
+      styleOptions,
+      statusOptions,
+      dictionarySubcategories,
+      dictionaryStyles,
+      dictionaryBrands,
       templates,
       outfits,
       outfitDraftSessions,
@@ -267,7 +319,26 @@ export function WardrobeProvider({ children }) {
       error,
       actions,
     }),
-    [actions, catalogs, categories, colorOptions, error, feedPosts, homeContent, items, loading, outfitDraftSessions, outfits, templates]
+    [
+      actions,
+      catalogs,
+      categories,
+      colorOptions,
+      dictionaryBrands,
+      dictionaryStyles,
+      dictionarySubcategories,
+      error,
+      feedPosts,
+      homeContent,
+      items,
+      loading,
+      outfitDraftSessions,
+      outfits,
+      seasonOptions,
+      statusOptions,
+      styleOptions,
+      templates,
+    ]
   );
 
   return <WardrobeContext.Provider value={value}>{children}</WardrobeContext.Provider>;

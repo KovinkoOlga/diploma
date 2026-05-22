@@ -30,8 +30,6 @@ export async function fetchItems(filters = {}) {
   appendArray(params, "season", filters.season);
   appendArray(params, "style", filters.style);
   appendArray(params, "brand", filters.brand);
-  appendArray(params, "size", filters.size);
-  appendArray(params, "material", filters.material);
   appendArray(params, "status", filters.status);
   if (filters.outfitParticipation) params.set("outfitParticipation", filters.outfitParticipation);
   const suffix = params.toString() ? `?${params}` : "";
@@ -66,6 +64,34 @@ export async function createCatalog(title) {
 
 export async function updateCatalog(catalogId, title) {
   return apiPatch(`/wardrobe/catalogs/${catalogId}`, { title });
+}
+
+export async function fetchDictionaries() {
+  return apiGet("/wardrobe/dictionaries");
+}
+
+export async function updateSubcategory(subcategoryId, name) {
+  return apiPatch(`/wardrobe/subcategories/${subcategoryId}`, { name });
+}
+
+export async function deleteSubcategory(subcategoryId) {
+  return apiDelete(`/wardrobe/subcategories/${subcategoryId}`);
+}
+
+export async function updateStyle(styleId, name) {
+  return apiPatch(`/wardrobe/styles/${styleId}`, { name });
+}
+
+export async function deleteStyle(styleId) {
+  return apiDelete(`/wardrobe/styles/${styleId}`);
+}
+
+export async function updateBrand(brandId, name) {
+  return apiPatch(`/wardrobe/brands/${brandId}`, { name });
+}
+
+export async function deleteBrand(brandId) {
+  return apiDelete(`/wardrobe/brands/${brandId}`);
 }
 
 export async function createDraft(payload) {

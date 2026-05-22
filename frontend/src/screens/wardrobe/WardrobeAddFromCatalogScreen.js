@@ -10,10 +10,10 @@ import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
 import { matchesWardrobeSearch } from "../../utils/wardrobe";
 
-export default function WardrobeAddFromCatalogScreen({ navigation }) {
+export default function WardrobeAddFromCatalogScreen({ navigation, route }) {
   const { colors, typography, spacing, radius, layout } = useAppTheme();
   const { templates, categories, catalogs, actions } = useWardrobe();
-  const [catalogId, setCatalogId] = useState(catalogs[0]?.id ?? "main");
+  const [catalogId, setCatalogId] = useState(route.params?.catalogId ?? catalogs[0]?.id ?? "main");
   const [activeCategoryId, setActiveCategoryId] = useState("all");
   const [query, setQuery] = useState("");
 

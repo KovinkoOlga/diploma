@@ -18,6 +18,34 @@ class CategoryResponse(BaseModel):
     subcategories: list[str] = Field(default_factory=list)
 
 
+class DictionarySubcategoryResponse(BaseModel):
+    id: str
+    name: str
+    categoryId: str
+    categoryTitle: str
+    isSystem: bool = False
+    itemCount: int = 0
+
+
+class DictionaryStyleResponse(BaseModel):
+    id: str
+    name: str
+    isSystem: bool = False
+    itemCount: int = 0
+
+
+class DictionaryBrandResponse(BaseModel):
+    id: str
+    name: str
+    itemCount: int = 0
+
+
+class DictionariesResponse(BaseModel):
+    subcategories: list[DictionarySubcategoryResponse] = Field(default_factory=list)
+    styles: list[DictionaryStyleResponse] = Field(default_factory=list)
+    brands: list[DictionaryBrandResponse] = Field(default_factory=list)
+
+
 class StatusResponse(BaseModel):
     id: str
     title: str
@@ -42,8 +70,6 @@ class TemplateResponse(BaseModel):
     styles: list[str] = Field(default_factory=list)
     seasons: list[str] = Field(default_factory=list)
     brand: str = ""
-    material: str = ""
-    size: str = ""
     image: str | None = None
 
 
@@ -52,7 +78,6 @@ class BootstrapResponse(BaseModel):
     categories: list[CategoryResponse]
     colorOptions: list[ColorResponse]
     seasons: list[str]
-    sizes: list[str]
     styles: list[str]
     statuses: list[StatusResponse]
     templates: list[TemplateResponse]
@@ -65,8 +90,6 @@ class ItemPayload(BaseModel):
     subcategory: str = ""
     colorIds: list[str] = Field(default_factory=list)
     brand: str = ""
-    size: str = ""
-    material: str = ""
     seasons: list[str] = Field(default_factory=list)
     styles: list[str] = Field(default_factory=list)
     status: str = "active"
@@ -83,8 +106,6 @@ class ItemPatch(BaseModel):
     subcategory: str | None = None
     colorIds: list[str] | None = None
     brand: str | None = None
-    size: str | None = None
-    material: str | None = None
     seasons: list[str] | None = None
     styles: list[str] | None = None
     status: str | None = None
@@ -103,8 +124,6 @@ class ItemResponse(BaseModel):
     colorIds: list[str] = Field(default_factory=list)
     colorDetails: list[ColorResponse] = Field(default_factory=list)
     brand: str = ""
-    size: str = ""
-    material: str = ""
     seasons: list[str] = Field(default_factory=list)
     season: list[str] = Field(default_factory=list)
     styles: list[str] = Field(default_factory=list)
@@ -134,6 +153,10 @@ class CatalogCreatePayload(BaseModel):
 
 class CatalogPatchPayload(BaseModel):
     title: str = Field(min_length=1)
+
+
+class DictionaryNamePatchPayload(BaseModel):
+    name: str = Field(min_length=1)
 
 
 class DraftCreatePayload(BaseModel):

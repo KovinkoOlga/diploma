@@ -12,6 +12,11 @@ from app.modules.wardrobe.schemas import (
     CatalogCreatePayload,
     CatalogPatchPayload,
     CatalogResponse,
+    DictionariesResponse,
+    DictionaryBrandResponse,
+    DictionaryNamePatchPayload,
+    DictionaryStyleResponse,
+    DictionarySubcategoryResponse,
     DraftCreatePayload,
     DraftResponse,
     ItemPatch,
@@ -77,6 +82,109 @@ async def update_catalog(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Catalog not found")
 
 
+@router.get("/dictionaries", response_model=DictionariesResponse)
+async def dictionaries(
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> DictionariesResponse:
+    return await service.get_dictionaries(connection, _user_id(current_user))
+
+
+@router.patch("/subcategories/{subcategory_id}", response_model=DictionarySubcategoryResponse)
+async def update_subcategory(
+    subcategory_id: str,
+    payload: DictionaryNamePatchPayload,
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> DictionarySubcategoryResponse:
+    try:
+        return await service.rename_subcategory(connection, _user_id(current_user), subcategory_id, payload.name)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подкатегория не найдена")
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.delete("/subcategories/{subcategory_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_subcategory(
+    subcategory_id: str,
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> None:
+    try:
+        await service.delete_subcategory(connection, _user_id(current_user), subcategory_id)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Подкатегория не найдена")
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.patch("/styles/{style_id}", response_model=DictionaryStyleResponse)
+async def update_style(
+    style_id: str,
+    payload: DictionaryNamePatchPayload,
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> DictionaryStyleResponse:
+    try:
+        return await service.rename_style(connection, _user_id(current_user), style_id, payload.name)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Стиль не найден")
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.delete("/styles/{style_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_style(
+    style_id: str,
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> None:
+    try:
+        await service.delete_style(connection, _user_id(current_user), style_id)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Стиль не найден")
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.patch("/brands/{brand_id}", response_model=DictionaryBrandResponse)
+async def update_brand(
+    brand_id: str,
+    payload: DictionaryNamePatchPayload,
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> DictionaryBrandResponse:
+    try:
+        return await service.rename_brand(connection, _user_id(current_user), brand_id, payload.name)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Бренд не найден")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
+@router.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_brand(
+    brand_id: str,
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> None:
+    try:
+        await service.delete_brand(connection, _user_id(current_user), brand_id)
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Бренд не найден")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
 @router.get("/items", response_model=list[ItemResponse])
 async def items(
     q: str = "",
@@ -87,8 +195,6 @@ async def items(
     season: list[str] = Query(default=[]),
     style: list[str] = Query(default=[]),
     brand: list[str] = Query(default=[]),
-    size: list[str] = Query(default=[]),
-    material: list[str] = Query(default=[]),
     status: list[str] = Query(default=[]),
     outfitParticipation: str = "",
     sortBy: str = "recent",
@@ -108,8 +214,6 @@ async def items(
             "season": season,
             "style": style,
             "brand": brand,
-            "size": size,
-            "material": material,
             "status": status,
             "outfitParticipation": outfitParticipation,
             "sortBy": sortBy,

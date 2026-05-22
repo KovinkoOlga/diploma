@@ -22,9 +22,10 @@ import {
   formatWardrobeItemCount,
   sortWardrobeItems,
 } from "../../utils/wardrobe";
+import { WARDROBE_PHOTO_MODES, openWardrobePhotoFlow } from "../../utils/wardrobePhotoFlow";
 
 function CategoryTile({ category, count, onPress }) {
-  const { colors, spacing, typography, radius } = useAppTheme();
+  const { colors, typography, radius } = useAppTheme();
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ width: "48.2%", opacity: pressed ? 0.82 : 1 }]}>
@@ -193,7 +194,7 @@ function CatalogSegmentedBar({ catalogs, activeCatalogId, onSelect }) {
   );
 }
 
-function ThreeActionEmpty({ navigation }) {
+function ThreeActionEmpty({ navigation, catalogId }) {
   const { spacing } = useAppTheme();
 
   return (
@@ -201,12 +202,29 @@ function ThreeActionEmpty({ navigation }) {
       <EmptyState
         icon="shirt-outline"
         title="Ваш цифровой шкаф пока пуст"
-        subtitle="Добавьте первую вещь — сфотографируйте ее, загрузите из галереи или выберите из каталога"
+        subtitle="Добавьте первую вещь: сфотографируйте её, загрузите из галереи или выберите из базового каталога."
       />
       <View style={{ gap: spacing.sm }}>
-        <ActionButton label="Сфотографировать" icon="camera-outline" onPress={() => navigation.navigate(Routes.WardrobeAddFromPhoto)} fullWidth />
-        <ActionButton label="Загрузить" icon="image-outline" variant="secondary" onPress={() => navigation.navigate(Routes.WardrobeAddFromGallery)} fullWidth />
-        <ActionButton label="Выбрать из каталога" icon="grid-outline" variant="secondary" onPress={() => navigation.navigate(Routes.WardrobeAddFromCatalog)} fullWidth />
+        <ActionButton
+          label="Сфотографировать"
+          icon="camera-outline"
+          onPress={() => openWardrobePhotoFlow({ navigation, mode: WARDROBE_PHOTO_MODES.camera, catalogId })}
+          fullWidth
+        />
+        <ActionButton
+          label="Загрузить"
+          icon="image-outline"
+          variant="secondary"
+          onPress={() => openWardrobePhotoFlow({ navigation, mode: WARDROBE_PHOTO_MODES.gallery, catalogId })}
+          fullWidth
+        />
+        <ActionButton
+          label="Выбрать из каталога"
+          icon="grid-outline"
+          variant="secondary"
+          onPress={() => navigation.navigate(Routes.WardrobeAddFromCatalog, catalogId ? { catalogId } : undefined)}
+          fullWidth
+        />
       </View>
     </View>
   );
@@ -215,7 +233,7 @@ function ThreeActionEmpty({ navigation }) {
 export default function WardrobeHomeScreen({ navigation }) {
   const { colors, typography, spacing, layout } = useAppTheme();
   const { bottom } = useScreenContentInsets(96);
-  const { items, catalogs, categories, colorOptions, outfits } = useWardrobe();
+  const { items, catalogs, categories, colorOptions, seasonOptions, styleOptions, statusOptions, outfits } = useWardrobe();
   const [activeCatalogId, setActiveCatalogId] = useState(catalogs[0]?.id ?? "main");
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState(createEmptyWardrobeFilters());
@@ -233,7 +251,10 @@ export default function WardrobeHomeScreen({ navigation }) {
   const outfitCountMap = useMemo(() => getOutfitCountMap(outfits), [outfits]);
   const activeItems = useMemo(() => items.filter((item) => !item.isArchived), [items]);
   const catalogItems = useMemo(() => activeItems.filter((item) => item.catalogId === activeCatalogId), [activeCatalogId, activeItems]);
-  const filterOptions = useMemo(() => getWardrobeFilterOptions(catalogItems, colorOptions), [catalogItems, colorOptions]);
+  const filterOptions = useMemo(
+    () => getWardrobeFilterOptions(catalogItems, colorOptions, { seasonOptions, styleOptions, statusOptions }),
+    [catalogItems, colorOptions, seasonOptions, statusOptions, styleOptions]
+  );
   const filteredCatalogItems = useMemo(() => {
     const filtered = applyWardrobeFilters(catalogItems, filters, outfitCountMap).filter((item) =>
       matchesWardrobeSearch(item, query, categories, catalogs)
@@ -291,12 +312,40 @@ export default function WardrobeHomeScreen({ navigation }) {
         }
       >
         <View style={{ paddingHorizontal: layout.screenPadding, paddingTop: spacing.lg }}>
-          <ThreeActionEmpty navigation={navigation} />
+          <ThreeActionEmpty navigation={navigation} catalogId={activeCatalogId} />
         </View>
         <SheetModal visible={menuVisible} onClose={() => setMenuVisible(false)} title="Действия">
           <View style={{ gap: spacing.sm }}>
-            <ActionButton label="Редактировать каталоги" icon="albums-outline" variant="secondary" onPress={() => { setMenuVisible(false); navigation.navigate(Routes.WardrobeManageCatalogs); }} fullWidth />
-            <ActionButton label="Открыть архив" icon="archive-outline" variant="secondary" onPress={() => { setMenuVisible(false); navigation.navigate(Routes.WardrobeArchive); }} fullWidth />
+            <ActionButton
+              label="Как снять вещь"
+              icon="sparkles-outline"
+              variant="secondary"
+              onPress={() => {
+                setMenuVisible(false);
+                navigation.navigate(Routes.WardrobePhotoGuide, { mode: WARDROBE_PHOTO_MODES.camera, catalogId: activeCatalogId });
+              }}
+              fullWidth
+            />
+            <ActionButton
+              label="Справочники"
+              icon="albums-outline"
+              variant="secondary"
+              onPress={() => {
+                setMenuVisible(false);
+                navigation.navigate(Routes.WardrobeManageCatalogs);
+              }}
+              fullWidth
+            />
+            <ActionButton
+              label="Открыть архив"
+              icon="archive-outline"
+              variant="secondary"
+              onPress={() => {
+                setMenuVisible(false);
+                navigation.navigate(Routes.WardrobeArchive);
+              }}
+              fullWidth
+            />
           </View>
         </SheetModal>
       </Screen>
@@ -324,7 +373,13 @@ export default function WardrobeHomeScreen({ navigation }) {
           <View style={{ flex: 1 }}>
             <SearchBar value={query} onChangeText={setQuery} onClear={() => setQuery("")} placeholder="Найти вещь" />
           </View>
-          <ActionButton icon="options-outline" compact variant="secondary" label={activeFilterCount ? String(activeFilterCount) : undefined} onPress={() => setFilterVisible(true)} />
+          <ActionButton
+            icon="options-outline"
+            compact
+            variant="secondary"
+            label={activeFilterCount ? String(activeFilterCount) : undefined}
+            onPress={() => setFilterVisible(true)}
+          />
           <ActionButton icon="swap-vertical-outline" compact variant="secondary" onPress={() => setSortVisible(true)} />
         </View>
 
@@ -362,17 +417,63 @@ export default function WardrobeHomeScreen({ navigation }) {
         ) : null}
       </ScrollView>
 
-      <FAB onPress={() => navigation.navigate(Routes.AddItem)} style={{ bottom: 72 }} />
+      <FAB onPress={() => navigation.navigate(Routes.AddItem, { catalogId: activeCatalogId })} style={{ bottom: 72 }} />
 
       <SheetModal visible={menuVisible} onClose={() => setMenuVisible(false)} title="Действия">
         <View style={{ gap: spacing.sm }}>
-          <ActionButton label="Редактировать каталоги" icon="albums-outline" variant="secondary" onPress={() => { setMenuVisible(false); navigation.navigate(Routes.WardrobeManageCatalogs); }} fullWidth />
-          <ActionButton label="Выбрать несколько вещей" icon="checkmark-done-outline" variant="secondary" onPress={() => { setMenuVisible(false); openWithState(Routes.WardrobeAllItems, { catalogId: activeCatalogId, selectionMode: true }); }} fullWidth />
-          <ActionButton label="Открыть архив" icon="archive-outline" variant="secondary" onPress={() => { setMenuVisible(false); navigation.navigate(Routes.WardrobeArchive); }} fullWidth />
+          <ActionButton
+            label="Как снять вещь"
+            icon="sparkles-outline"
+            variant="secondary"
+            onPress={() => {
+              setMenuVisible(false);
+              navigation.navigate(Routes.WardrobePhotoGuide, { mode: WARDROBE_PHOTO_MODES.camera, catalogId: activeCatalogId });
+            }}
+            fullWidth
+          />
+          <ActionButton
+            label="Справочники"
+            icon="albums-outline"
+            variant="secondary"
+            onPress={() => {
+              setMenuVisible(false);
+              navigation.navigate(Routes.WardrobeManageCatalogs);
+            }}
+            fullWidth
+          />
+          <ActionButton
+            label="Выбрать несколько вещей"
+            icon="checkmark-done-outline"
+            variant="secondary"
+            onPress={() => {
+              setMenuVisible(false);
+              openWithState(Routes.WardrobeAllItems, { catalogId: activeCatalogId, selectionMode: true });
+            }}
+            fullWidth
+          />
+          <ActionButton
+            label="Открыть архив"
+            icon="archive-outline"
+            variant="secondary"
+            onPress={() => {
+              setMenuVisible(false);
+              navigation.navigate(Routes.WardrobeArchive);
+            }}
+            fullWidth
+          />
         </View>
       </SheetModal>
 
-      <WardrobeFiltersSheet visible={filterVisible} onClose={() => setFilterVisible(false)} filters={filters} onChangeFilters={setFilters} catalogs={catalogs} categories={categories} options={filterOptions} allowCatalog={false} />
+      <WardrobeFiltersSheet
+        visible={filterVisible}
+        onClose={() => setFilterVisible(false)}
+        filters={filters}
+        onChangeFilters={setFilters}
+        catalogs={catalogs}
+        categories={categories}
+        options={filterOptions}
+        allowCatalog={false}
+      />
       <WardrobeSortSheet visible={sortVisible} onClose={() => setSortVisible(false)} sortBy={sortBy} onChangeSort={setSortBy} />
     </Screen>
   );

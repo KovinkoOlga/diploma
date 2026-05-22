@@ -133,15 +133,6 @@ seasons = Table(
     Column("sort_order", Integer, nullable=False, default=0),
 )
 
-sizes = Table(
-    "sizes",
-    metadata,
-    Column("id", String(48), primary_key=True),
-    Column("name", String(40), nullable=False),
-    Column("category_id", String(48), ForeignKey("categories.id"), nullable=True),
-    UniqueConstraint("name", "category_id", name="uq_sizes_name_category"),
-)
-
 styles = Table(
     "styles",
     metadata,
@@ -174,7 +165,6 @@ wardrobe_items = Table(
     Column("status_id", String(48), ForeignKey("item_statuses.id"), nullable=False),
     Column("name", String(160), nullable=False),
     Column("brand_id", String(48), ForeignKey("brands.id"), nullable=True),
-    Column("size_id", String(48), ForeignKey("sizes.id"), nullable=True),
     Column("notes", Text, nullable=True),
     Column("attributes_json", JSON, nullable=True),
     Column("last_worn_at", DateTime(timezone=True), nullable=True),
@@ -255,8 +245,6 @@ wardrobe_item_templates = Table(
     Column("category_id", String(48), ForeignKey("categories.id"), nullable=False),
     Column("subcategory_name", String(120), nullable=False),
     Column("brand", String(120), nullable=False, default=""),
-    Column("size_name", String(40), nullable=False, default=""),
-    Column("material", String(80), nullable=False, default=""),
     Column("color_ids_json", JSON, nullable=False, default=list),
     Column("seasons_json", JSON, nullable=False, default=list),
     Column("styles_json", JSON, nullable=False, default=list),

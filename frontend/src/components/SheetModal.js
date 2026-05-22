@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { Animated, Easing, Modal, PanResponder, Pressable, ScrollView, Text, View } from "react-native";
+import { Animated, Easing, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 const OPEN_DURATION = 260;
 const CLOSE_DURATION = 200;
 
-export default function SheetModal({ visible, onClose, title, subtitle, children, footer }) {
+export default function SheetModal({ visible, onClose, title, subtitle, children, footer, withKeyboard = false }) {
   const { colors, spacing, radius, typography } = useAppTheme();
   const progress = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
@@ -115,6 +115,55 @@ export default function SheetModal({ visible, onClose, title, subtitle, children
     return null;
   }
 
+  const sheetBody = (
+    <Animated.View style={{ transform: [{ translateY }] }}>
+      <SafeAreaView
+        edges={["bottom"]}
+        style={{
+          backgroundColor: colors.background,
+          borderTopLeftRadius: radius.xl,
+          borderTopRightRadius: radius.xl,
+          paddingTop: spacing.md,
+        }}
+      >
+        <View
+          {...panResponder.panHandlers}
+          style={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.xs,
+            paddingBottom: spacing.xs,
+            minHeight: 48,
+            justifyContent: "flex-start",
+          }}
+        >
+          <View
+            style={{
+              width: 42,
+              height: 5,
+              borderRadius: radius.pill,
+              backgroundColor: colors.border,
+              alignSelf: "center",
+              marginBottom: spacing.sm,
+            }}
+          />
+          <Text style={[typography.sectionTitle, { color: colors.text }]}>{title}</Text>
+          {subtitle ? (
+            <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 4 }]}>{subtitle}</Text>
+          ) : null}
+        </View>
+        <ScrollView
+          style={{ maxHeight: 520, marginTop: spacing.sm }}
+          contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+        {footer ? <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>{footer}</View> : null}
+      </SafeAreaView>
+    </Animated.View>
+  );
+
   return (
     <Modal visible transparent animationType="none" onRequestClose={() => closeSheet()}>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
@@ -126,51 +175,13 @@ export default function SheetModal({ visible, onClose, title, subtitle, children
           }}
         />
         <Pressable style={StyleSheetAbsoluteFillObject} onPress={() => closeSheet()} />
-        <Animated.View style={{ transform: [{ translateY }] }}>
-          <SafeAreaView
-            edges={["bottom"]}
-            style={{
-              backgroundColor: colors.background,
-              borderTopLeftRadius: radius.xl,
-              borderTopRightRadius: radius.xl,
-              paddingTop: spacing.md,
-            }}
-          >
-            <View
-              {...panResponder.panHandlers}
-              style={{
-                paddingHorizontal: spacing.lg,
-                paddingTop: spacing.xs,
-                paddingBottom: spacing.xs,
-                minHeight: 48,
-                justifyContent: "flex-start",
-              }}
-            >
-              <View
-                style={{
-                  width: 42,
-                  height: 5,
-                  borderRadius: radius.pill,
-                  backgroundColor: colors.border,
-                  alignSelf: "center",
-                  marginBottom: spacing.sm,
-                }}
-              />
-              <Text style={[typography.sectionTitle, { color: colors.text }]}>{title}</Text>
-              {subtitle ? (
-                <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 4 }]}>{subtitle}</Text>
-              ) : null}
-            </View>
-            <ScrollView
-              style={{ maxHeight: 520, marginTop: spacing.sm }}
-              contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </ScrollView>
-            {footer ? <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>{footer}</View> : null}
-          </SafeAreaView>
-        </Animated.View>
+        {withKeyboard ? (
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            {sheetBody}
+          </KeyboardAvoidingView>
+        ) : (
+          sheetBody
+        )}
       </View>
     </Modal>
   );
