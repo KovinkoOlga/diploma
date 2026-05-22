@@ -1,6 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import * as SecureStore from "expo-secure-store";
 import { Routes } from "../navigation/routes";
+import { PHOTO_BATCH_MAX_SELECTION } from "./wardrobePhotoBatch";
 
 export const WARDROBE_PHOTO_GUIDE_HIDDEN_KEY = "wardrobe_photo_guide_hidden";
 
@@ -42,7 +43,10 @@ const MODE_CONFIG = {
     launchPicker: () =>
       ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        orderedSelection: true,
         allowsEditing: false,
+        selectionLimit: PHOTO_BATCH_MAX_SELECTION,
         quality: 0.9,
       }),
   },
@@ -95,7 +99,7 @@ export async function openWardrobePhotoFlow({ navigation, mode, catalogId, repla
   navigation.navigate(targetRoute, params);
 }
 
-export async function launchWardrobePhotoFlow({ navigation, actions, catalogs, mode, catalogId }) {
+export async function launchWardrobePhotoFlow({ navigation, actions, catalogs, mode, catalogId, onStatusChange }) {
   const config = getWardrobePhotoModeConfig(mode);
   const permission = await config.requestPermission();
 
@@ -104,14 +108,29 @@ export async function launchWardrobePhotoFlow({ navigation, actions, catalogs, m
   }
 
   const result = await config.launchPicker();
-  if (result.canceled || !result.assets?.[0]) {
+  const assets = result.assets ?? [];
+
+  if (result.canceled || !assets[0]) {
     return { canceled: true };
+  }
+
+  const resolvedCatalogId = resolveWardrobePhotoCatalogId(catalogs, catalogId);
+
+  if (mode === WARDROBE_PHOTO_MODES.gallery && assets.length > 1) {
+    onStatusChange?.("Добавляем фотографии в очередь…");
+    const batch = actions.createPhotoBatch({
+      sourceType: config.sourceType,
+      catalogId: resolvedCatalogId,
+      assets,
+    });
+    navigation.replace(Routes.WardrobeProcessingStub, { batchId: batch.batchId });
+    return { canceled: false, batch };
   }
 
   const draft = await actions.uploadDraftImage({
     sourceType: config.sourceType,
-    catalogId: resolveWardrobePhotoCatalogId(catalogs, catalogId),
-    asset: result.assets[0],
+    catalogId: resolvedCatalogId,
+    asset: assets[0],
   });
 
   navigation.replace(Routes.WardrobeProcessingStub, { draftId: draft.id });

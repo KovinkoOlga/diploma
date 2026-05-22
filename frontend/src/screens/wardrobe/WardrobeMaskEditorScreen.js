@@ -5,7 +5,6 @@ import { Canvas, Circle, Group, Image as SkiaImage, Path, rect, useImage } from 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MediaPreview from "../../components/MediaPreview";
 import Screen from "../../components/Screen";
-import { Routes } from "../../navigation/routes";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { useAppTheme } from "../../theme/ThemeProvider";
 
@@ -502,6 +501,9 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { actions } = useWardrobe();
   const draftId = route.params?.draftId;
+  const batchId = route.params?.batchId ?? null;
+  const entryId = route.params?.entryId ?? null;
+  const returnRouteKey = route.params?.returnRouteKey ?? null;
   const [freshDraft, setFreshDraft] = useState(null);
   const hasLocalEditsRef = useRef(false);
   const originalImageUrl = freshDraft?.originalImageUrl ?? route.params?.originalImageUrl;
@@ -575,6 +577,30 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   const layerTransformOrigin = useMemo(
     () => [previewTransform.origin.x, previewTransform.origin.y, 0],
     [previewTransform.origin.x, previewTransform.origin.y]
+  );
+  const returnToConfirmScreen = useCallback(
+    (params) => {
+      const state = navigation.getState();
+      const fallbackIndex = Math.max(0, state.routes.length - 2);
+      const targetIndex = returnRouteKey
+        ? state.routes.findIndex((screenRoute) => screenRoute.key === returnRouteKey)
+        : fallbackIndex;
+
+      if (targetIndex < 0) {
+        navigation.goBack();
+        return;
+      }
+
+      navigation.reset({
+        index: targetIndex,
+        routes: state.routes.slice(0, targetIndex + 1).map((screenRoute, index) => ({
+          key: screenRoute.key,
+          name: screenRoute.name,
+          params: index === targetIndex ? { ...(screenRoute.params ?? {}), ...params } : screenRoute.params,
+        })),
+      });
+    },
+    [navigation, returnRouteKey]
   );
 
   useEffect(() => {
@@ -918,7 +944,7 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
       const activeStroke = currentStrokeRef.current;
       const saveStrokes = activeStroke?.points?.length ? [...strokesRef.current, activeStroke] : strokesRef.current;
       const finalMaskData = applyStrokesToMask(initialMaskDataRef.current, maskWidth, maskHeight, saveStrokes);
-      await actions.editDraftMask(draftId, {
+      const updatedDraftState = await actions.editDraftMask(draftId, {
         maskFile: {
           uri: createPgmUri(finalMaskData, maskWidth, maskHeight),
           name: `wardrobe-mask-${draftId}.pgm`,
@@ -927,17 +953,22 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
         flipHorizontal: flipHorizontalRef.current,
         rotationDegrees: rotationDegreesRef.current,
       });
-      navigation.navigate({
-        name: Routes.WardrobeConfirmItem,
-        params: { draftId, maskEditedAt: Date.now() },
-        merge: true,
+      if (batchId && entryId) {
+        actions.syncPhotoBatchEntryDraft(batchId, entryId, updatedDraftState);
+      }
+      returnToConfirmScreen({
+        draftId,
+        ...(batchId ? { batchId } : {}),
+        ...(entryId ? { entryId } : {}),
+        maskEditedAt: Date.now(),
+        updatedDraftState,
       });
     } catch (saveError) {
       setError(saveError.message || "Не удалось сохранить обрезку");
     } finally {
       setSaving(false);
     }
-  }, [actions, draftId, imageLoaded, maskHeight, maskReady, maskWidth, navigation]);
+  }, [actions, batchId, draftId, entryId, imageLoaded, maskHeight, maskReady, maskWidth, returnToConfirmScreen]);
 
   useLayoutEffect(() => {
     navigation.setOptions({

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import and_, delete, func, insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 from PIL import Image, ImageDraw, ImageOps
@@ -67,6 +68,15 @@ CATALOG_FAILED_STATUS = "failed"
 VALID_MASK_ROTATIONS = {0, 90, 180, 270}
 MASK_EDITOR_MAX_SIZE = 1024
 STYLE_SEPARATOR_PATTERN = r"\s*[_/\\-]+\s*"
+
+CONFIRM_DRAFT_FIELD_LABELS = {
+    "title": "название",
+    "catalogId": "каталог",
+    "categoryId": "категория",
+    "subcategory": "подкатегория",
+    "primaryImageFileId": "изображение вещи",
+    "status": "статус",
+}
 
 
 def normalize_name(value: str) -> str:
@@ -1505,6 +1515,92 @@ async def edit_draft_mask(
     return await get_draft(connection, user_id, draft_id)
 
 
+def _blank(value: Any) -> bool:
+    return not str(value or "").strip()
+
+
+def _draft_validation_error_from_pydantic(exc: ValidationError) -> str:
+    labels: list[str] = []
+    for entry in exc.errors():
+        location = entry.get("loc") or []
+        field_name = next(
+            (
+                part
+                for part in reversed(location)
+                if isinstance(part, str) and part in CONFIRM_DRAFT_FIELD_LABELS
+            ),
+            None,
+        )
+        if field_name is None:
+            continue
+        label = CONFIRM_DRAFT_FIELD_LABELS[field_name]
+        if label not in labels:
+            labels.append(label)
+
+    if labels:
+        return f"Заполните обязательные поля: {', '.join(labels)}"
+    return "Проверьте данные карточки вещи."
+
+
+async def _validate_confirm_draft_payload(
+    connection: AsyncConnection, user_id: str, row: dict[str, Any], data: dict[str, Any]
+) -> None:
+    title = str(data.get("title") or "").strip()
+    catalog_id = str(data.get("catalogId") or "").strip()
+    category_id = str(data.get("categoryId") or "").strip()
+    subcategory = str(data.get("subcategory") or "").strip()
+    status_code = str(data.get("status") or "").strip()
+    primary_image_file_id = str(data.get("primaryImageFileId") or "").strip() or None
+
+    data["title"] = title
+    data["catalogId"] = catalog_id
+    data["categoryId"] = category_id
+    data["subcategory"] = subcategory
+    data["status"] = status_code
+    data["primaryImageFileId"] = primary_image_file_id
+
+    if _blank(title):
+        raise ValueError("Заполните название вещи")
+    if _blank(catalog_id):
+        raise ValueError("Выберите каталог")
+    if _blank(category_id):
+        raise ValueError("Выберите категорию")
+    if _blank(subcategory):
+        raise ValueError("Выберите или введите подкатегорию")
+    if _blank(status_code):
+        raise ValueError("Выберите статус")
+
+    if row.get("source_type") in {"photo", "gallery"} and primary_image_file_id is None:
+        raise ValueError("Выберите изображение вещи")
+
+    allowed_primary_ids = {row.get("original_file_id"), row.get("processed_file_id"), row.get("catalog_file_id")}
+    if primary_image_file_id and primary_image_file_id not in allowed_primary_ids:
+        raise ValueError("Выбранное изображение устарело. Выберите изображение вещи заново")
+
+    category_exists = (
+        await connection.execute(select(categories.c.id).where(categories.c.id == category_id))
+    ).first()
+    if category_exists is None:
+        raise ValueError("Выберите корректную категорию")
+
+    catalog_exists = (
+        await connection.execute(
+            select(wardrobe_catalogs.c.id).where(
+                wardrobe_catalogs.c.id == catalog_id,
+                wardrobe_catalogs.c.user_id == user_id,
+            )
+        )
+    ).first()
+    if catalog_exists is None:
+        raise ValueError("Выберите корректный каталог")
+
+    status_exists = (
+        await connection.execute(select(item_statuses.c.id).where(item_statuses.c.code == status_code))
+    ).first()
+    if status_exists is None:
+        raise ValueError("Выберите корректный статус")
+
+
 async def confirm_draft(connection: AsyncConnection, user_id: str, draft_id: str, override: ItemPatch | None = None) -> ItemResponse:
     row = await _load_draft_row(connection, user_id, draft_id)
     draft = await _serialize_draft(connection, row)
@@ -1517,8 +1613,9 @@ async def confirm_draft(connection: AsyncConnection, user_id: str, draft_id: str
                 data[key] = value
         if override.colorIds is not None and override.colorPrediction is None:
             data.pop("colorPrediction", None)
-    allowed_primary_ids = {row.get("original_file_id"), row.get("processed_file_id"), row.get("catalog_file_id")}
-    selected_primary_id = data.get("primaryImageFileId")
-    if selected_primary_id and selected_primary_id not in allowed_primary_ids:
-        raise ValueError("Draft image selection is invalid")
-    return await create_item(connection, user_id, ItemPayload(**data))
+    await _validate_confirm_draft_payload(connection, user_id, row, data)
+    try:
+        payload = ItemPayload(**data)
+    except ValidationError as exc:
+        raise ValueError(_draft_validation_error_from_pydantic(exc)) from exc
+    return await create_item(connection, user_id, payload)

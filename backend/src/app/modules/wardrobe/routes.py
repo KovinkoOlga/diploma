@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.db.database import get_connection
@@ -435,5 +436,10 @@ async def confirm_draft(
         return await service.confirm_draft(connection, _user_id(current_user), draft_id, payload)
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+    except ValidationError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Проверьте заполнение обязательных полей карточки вещи",
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))

@@ -1,8 +1,17 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { LayoutAnimation, Platform, UIManager } from "react-native";
 import * as wardrobeApi from "../api/wardrobe";
 import * as outfitsApi from "../api/outfits";
 import * as contentApi from "../api/content";
+import {
+  PHOTO_BATCH_UPLOAD_CONCURRENCY,
+  PHOTO_BATCH_UPLOAD_STATUS,
+  createPhotoBatch,
+  findNextPhotoBatchIndex,
+  getLastSavedPhotoBatchItemId,
+  getPhotoBatchEntry,
+  photoBatchReducer,
+} from "../utils/wardrobePhotoBatch";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -34,8 +43,14 @@ export function WardrobeProvider({ children }) {
   const [outfitDraftSessions, setOutfitDraftSessions] = useState({});
   const [feedPosts, setFeedPosts] = useState([]);
   const [homeContent, setHomeContent] = useState(null);
+  const [photoBatch, dispatchPhotoBatch] = useReducer(photoBatchReducer, null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const photoBatchRef = useRef(photoBatch);
+
+  useEffect(() => {
+    photoBatchRef.current = photoBatch;
+  }, [photoBatch]);
 
   const refreshBootstrap = useCallback(async () => {
     const bootstrap = await wardrobeApi.fetchBootstrap();
@@ -96,6 +111,141 @@ export function WardrobeProvider({ children }) {
   useEffect(() => {
     refreshAll();
   }, [refreshAll]);
+
+  const getPhotoBatchSnapshot = useCallback((batchId = null) => {
+    const batch = photoBatchRef.current;
+    if (!batch) return null;
+    if (batchId && batch.batchId !== batchId) return null;
+    return batch;
+  }, []);
+
+  const clearPhotoBatchState = useCallback((batchId = null) => {
+    dispatchPhotoBatch({ type: "batch_cleared", batchId });
+  }, []);
+
+  const syncPhotoBatchEntryDraftState = useCallback((batchId, entryId, draftState) => {
+    if (!batchId || !entryId || !draftState) return draftState;
+    dispatchPhotoBatch({ type: "entry_draft_synced", batchId, entryId, draftState });
+    return draftState;
+  }, []);
+
+  const refreshPhotoBatchEntryState = useCallback(
+    async (batchId, entryId) => {
+      const batch = getPhotoBatchSnapshot(batchId);
+      const entry = getPhotoBatchEntry(batch, entryId);
+      if (!entry?.draftId) {
+        throw new Error("Черновик для фото еще не создан");
+      }
+      const next = await wardrobeApi.fetchDraft(entry.draftId);
+      return syncPhotoBatchEntryDraftState(batchId, entryId, next);
+    },
+    [getPhotoBatchSnapshot, syncPhotoBatchEntryDraftState]
+  );
+
+  const retryPhotoBatchEntryState = useCallback((batchId, entryId) => {
+    if (!getPhotoBatchSnapshot(batchId) || !entryId) return;
+    dispatchPhotoBatch({ type: "entry_retry_requested", batchId, entryId });
+  }, [getPhotoBatchSnapshot]);
+
+  const advancePhotoBatchEntryState = useCallback(
+    (batchId, entryId, update = {}) => {
+      const batch = getPhotoBatchSnapshot(batchId);
+      if (!batch) {
+        return { hasNext: false, nextIndex: -1, nextEntry: null, lastSavedItemId: null };
+      }
+
+      const entryIndex = batch.entries.findIndex((entry) => entry.id === entryId);
+      if (entryIndex === -1) {
+        return {
+          hasNext: false,
+          nextIndex: -1,
+          nextEntry: null,
+          lastSavedItemId: getLastSavedPhotoBatchItemId(batch),
+        };
+      }
+
+      let nextBatch = batch;
+
+      if (update.savedItemId) {
+        dispatchPhotoBatch({ type: "entry_saved", batchId, entryId, itemId: update.savedItemId });
+        nextBatch = {
+          ...nextBatch,
+          entries: nextBatch.entries.map((entry) =>
+            entry.id === entryId ? { ...entry, savedItemId: update.savedItemId, error: "" } : entry
+          ),
+        };
+      }
+
+      if (update.skip) {
+        dispatchPhotoBatch({ type: "entry_skipped", batchId, entryId });
+        nextBatch = {
+          ...nextBatch,
+          entries: nextBatch.entries.map((entry) =>
+            entry.id === entryId ? { ...entry, uploadStatus: PHOTO_BATCH_UPLOAD_STATUS.skipped, error: "" } : entry
+          ),
+        };
+      }
+
+      const nextIndex = findNextPhotoBatchIndex(nextBatch, entryIndex + 1);
+      if (nextIndex >= 0) {
+        dispatchPhotoBatch({ type: "current_index_set", batchId, index: nextIndex });
+      }
+
+      return {
+        hasNext: nextIndex >= 0,
+        nextIndex,
+        nextEntry: nextIndex >= 0 ? nextBatch.entries[nextIndex] : null,
+        lastSavedItemId: getLastSavedPhotoBatchItemId(nextBatch),
+      };
+    },
+    [getPhotoBatchSnapshot]
+  );
+
+  const createPhotoUploadBatch = useCallback(({ assets, catalogId, sourceType = "gallery" }) => {
+    const batch = createPhotoBatch({ assets, catalogId, sourceType });
+    dispatchPhotoBatch({ type: "batch_created", batch });
+    return batch;
+  }, []);
+
+  const runPhotoBatchUpload = useCallback(async (batchId, entryId) => {
+    const batch = getPhotoBatchSnapshot(batchId);
+    const entry = getPhotoBatchEntry(batch, entryId);
+    if (!batch || !entry || entry.uploadStatus !== PHOTO_BATCH_UPLOAD_STATUS.pending) {
+      return;
+    }
+
+    dispatchPhotoBatch({ type: "entry_upload_started", batchId, entryId });
+
+    try {
+      const draft = await wardrobeApi.uploadDraftImage({
+        sourceType: batch.sourceType,
+        catalogId: batch.catalogId,
+        asset: entry.asset,
+      });
+      dispatchPhotoBatch({ type: "entry_upload_succeeded", batchId, entryId, draft });
+    } catch (requestError) {
+      dispatchPhotoBatch({
+        type: "entry_upload_failed",
+        batchId,
+        entryId,
+        error: requestError.message || "Не удалось загрузить фото",
+      });
+    }
+  }, [getPhotoBatchSnapshot]);
+
+  useEffect(() => {
+    if (!photoBatch?.entries?.length) return;
+
+    let activeUploads = photoBatch.entries.filter((entry) => entry.uploadStatus === PHOTO_BATCH_UPLOAD_STATUS.uploading).length;
+    if (activeUploads >= PHOTO_BATCH_UPLOAD_CONCURRENCY) return;
+
+    const pendingEntries = photoBatch.entries.filter((entry) => entry.uploadStatus === PHOTO_BATCH_UPLOAD_STATUS.pending);
+    for (const entry of pendingEntries) {
+      if (activeUploads >= PHOTO_BATCH_UPLOAD_CONCURRENCY) break;
+      activeUploads += 1;
+      runPhotoBatchUpload(photoBatch.batchId, entry.id);
+    }
+  }, [photoBatch, runPhotoBatchUpload]);
 
   const actions = useMemo(
     () => ({
@@ -181,6 +331,27 @@ export function WardrobeProvider({ children }) {
       },
       async uploadDraftImage(payload) {
         return wardrobeApi.uploadDraftImage(payload);
+      },
+      createPhotoBatch(payload) {
+        return createPhotoUploadBatch(payload);
+      },
+      getPhotoBatch(batchId) {
+        return getPhotoBatchSnapshot(batchId);
+      },
+      clearPhotoBatch(batchId) {
+        clearPhotoBatchState(batchId);
+      },
+      syncPhotoBatchEntryDraft(batchId, entryId, draftState) {
+        return syncPhotoBatchEntryDraftState(batchId, entryId, draftState);
+      },
+      async refreshPhotoBatchEntry(batchId, entryId) {
+        return refreshPhotoBatchEntryState(batchId, entryId);
+      },
+      retryPhotoBatchEntry(batchId, entryId) {
+        retryPhotoBatchEntryState(batchId, entryId);
+      },
+      advancePhotoBatchEntry(batchId, entryId, update) {
+        return advancePhotoBatchEntryState(batchId, entryId, update);
       },
       async createDraftFromTemplate(templateId, catalogId) {
         return wardrobeApi.createDraftFromTemplate(templateId, catalogId);
@@ -295,7 +466,21 @@ export function WardrobeProvider({ children }) {
         setFeedPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, saved: result.saved } : post)));
       },
     }),
-    [items, refreshAll, refreshBootstrap, refreshContent, refreshDictionaries, refreshItems, refreshOutfits]
+    [
+      advancePhotoBatchEntryState,
+      clearPhotoBatchState,
+      createPhotoUploadBatch,
+      getPhotoBatchSnapshot,
+      items,
+      refreshAll,
+      refreshBootstrap,
+      refreshContent,
+      refreshDictionaries,
+      refreshItems,
+      refreshOutfits,
+      refreshPhotoBatchEntryState,
+      retryPhotoBatchEntryState,
+    ]
   );
 
   const value = useMemo(
@@ -315,6 +500,7 @@ export function WardrobeProvider({ children }) {
       outfitDraftSessions,
       feedPosts,
       homeContent,
+      photoBatch,
       loading,
       error,
       actions,
@@ -334,6 +520,7 @@ export function WardrobeProvider({ children }) {
       loading,
       outfitDraftSessions,
       outfits,
+      photoBatch,
       seasonOptions,
       statusOptions,
       styleOptions,

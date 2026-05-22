@@ -37,7 +37,93 @@ export function getRefreshToken() {
 async function parseResponse(response) {
   if (response.status === 204) return null;
   const text = await response.text();
-  return text ? JSON.parse(text) : null;
+  if (!text) return null;
+
+  const trimmed = text.trim();
+  const looksLikeJson =
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"));
+
+  if (!looksLikeJson) {
+    return { rawText: text };
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { rawText: text };
+  }
+}
+
+const FIELD_LABELS = {
+  title: "название",
+  catalogId: "каталог",
+  categoryId: "категория",
+  subcategory: "подкатегория",
+  primaryImageFileId: "изображение вещи",
+  status: "статус",
+};
+
+function isServerErrorText(text) {
+  const trimmed = String(text ?? "").trim();
+  return !trimmed || /^internal server error/i.test(trimmed) || trimmed.startsWith("<");
+}
+
+function sanitizeErrorText(text) {
+  const trimmed = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!trimmed) return "";
+  if (isServerErrorText(trimmed)) {
+    return "Ошибка сервера. Попробуйте ещё раз.";
+  }
+  if (/json parse error|pydantic|validation error|traceback|itempayload/i.test(trimmed)) {
+    return "Проверьте заполнение обязательных полей.";
+  }
+  return trimmed;
+}
+
+function formatValidationDetails(detail) {
+  if (!Array.isArray(detail) || !detail.length) return "";
+
+  const labels = [];
+  for (const entry of detail) {
+    const location = Array.isArray(entry?.loc) ? entry.loc : [];
+    const fieldName = [...location].reverse().find((part) => typeof part === "string" && FIELD_LABELS[part]);
+    const label = FIELD_LABELS[fieldName];
+    if (label && !labels.includes(label)) {
+      labels.push(label);
+    }
+  }
+
+  if (labels.length) {
+    return `Проверьте обязательные поля: ${labels.join(", ")}`;
+  }
+
+  return "Проверьте корректность заполнения полей.";
+}
+
+function buildErrorMessage(response, payload) {
+  const detail = payload?.detail;
+  if (Array.isArray(detail)) {
+    const validationMessage = formatValidationDetails(detail);
+    if (validationMessage) return validationMessage;
+  }
+
+  if (typeof detail === "string" && detail.trim()) {
+    return sanitizeErrorText(detail);
+  }
+
+  if (typeof payload?.message === "string" && payload.message.trim()) {
+    return sanitizeErrorText(payload.message);
+  }
+
+  if (typeof payload?.rawText === "string" && payload.rawText.trim()) {
+    return sanitizeErrorText(payload.rawText);
+  }
+
+  if (response.status >= 500) {
+    return "Ошибка сервера. Попробуйте ещё раз.";
+  }
+
+  return "Не удалось выполнить запрос. Попробуйте ещё раз.";
 }
 
 function buildBody(body) {
@@ -98,8 +184,7 @@ async function request(path, options = {}, retry = true) {
   }
 
   if (!response.ok) {
-    const message = payload?.detail || payload?.message || "API request failed";
-    throw new Error(Array.isArray(message) ? message.map((entry) => entry.msg).join(", ") : message);
+    throw new Error(buildErrorMessage(response, payload));
   }
 
   return payload;
@@ -124,4 +209,3 @@ export async function apiDelete(path) {
 export async function apiPostPublic(path, body) {
   return request(path, { method: "POST", body: JSON.stringify(body ?? {}), skipAuth: true }, false);
 }
-

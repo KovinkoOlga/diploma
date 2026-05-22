@@ -5,13 +5,14 @@ import Screen from "../../components/Screen";
 import ActionButton from "../../components/ActionButton";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { useWardrobe } from "../../store/WardrobeStore";
-import { launchWardrobePhotoFlow, resolveWardrobePhotoCatalogId, getWardrobePhotoModeConfig } from "../../utils/wardrobePhotoFlow";
+import { getWardrobePhotoModeConfig, launchWardrobePhotoFlow, resolveWardrobePhotoCatalogId } from "../../utils/wardrobePhotoFlow";
 
 export default function WardrobePhotoLauncherScreen({ navigation, route, mode }) {
   const { colors, spacing, typography, radius, layout } = useAppTheme();
   const { catalogs, actions } = useWardrobe();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const startedRef = useRef(false);
   const config = getWardrobePhotoModeConfig(mode);
   const catalogId = resolveWardrobePhotoCatalogId(catalogs, route.params?.catalogId);
@@ -21,6 +22,8 @@ export default function WardrobePhotoLauncherScreen({ navigation, route, mode })
 
     setPending(true);
     setError("");
+    setStatusMessage("");
+
     try {
       const result = await launchWardrobePhotoFlow({
         navigation,
@@ -28,14 +31,17 @@ export default function WardrobePhotoLauncherScreen({ navigation, route, mode })
         catalogs,
         mode,
         catalogId,
+        onStatusChange: setStatusMessage,
       });
 
       if (result.canceled) {
         setPending(false);
+        setStatusMessage("");
       }
     } catch (requestError) {
       setError(requestError.message || config.defaultError);
       setPending(false);
+      setStatusMessage("");
     }
   };
 
@@ -87,13 +93,13 @@ export default function WardrobePhotoLauncherScreen({ navigation, route, mode })
             {config.launcherTitle}
           </Text>
           <Text style={[typography.body, { color: colors.secondaryText, marginTop: spacing.sm, textAlign: "center" }]}>
-            {error || config.launcherDescription}
+            {error || statusMessage || config.launcherDescription}
           </Text>
         </View>
 
         <View style={{ gap: spacing.sm }}>
           <ActionButton
-            label={pending ? "Открываем..." : config.retryLabel}
+            label={pending ? statusMessage || "Открываем..." : config.retryLabel}
             icon={config.ctaIcon}
             disabled={pending}
             onPress={startFlow}
