@@ -19,6 +19,7 @@ from app.db.metadata import (
     item_statuses,
     item_styles,
     outfit_items,
+    outfits,
     seasons,
     styles,
     subcategories,
@@ -298,6 +299,7 @@ def _dictionary_style_response(row: dict[str, Any]) -> DictionaryStyleResponse:
         name=row["name"],
         isSystem=bool(row.get("is_system", False)),
         itemCount=int(row.get("item_count") or 0),
+        outfitCount=int(row.get("outfit_count") or 0),
     )
 
 
@@ -353,6 +355,7 @@ async def _dictionary_style_rows(connection: AsyncConnection, user_id: str) -> l
                 styles.c.name,
                 styles.c.is_system,
                 func.count(func.distinct(wardrobe_items.c.id)).label("item_count"),
+                func.count(func.distinct(outfits.c.id)).label("outfit_count"),
             )
             .select_from(
                 styles.outerjoin(item_styles, item_styles.c.style_id == styles.c.id).outerjoin(
@@ -360,6 +363,12 @@ async def _dictionary_style_rows(connection: AsyncConnection, user_id: str) -> l
                     and_(
                         wardrobe_items.c.id == item_styles.c.item_id,
                         wardrobe_items.c.user_id == user_id,
+                    ),
+                ).outerjoin(
+                    outfits,
+                    and_(
+                        outfits.c.style_id == styles.c.id,
+                        outfits.c.user_id == user_id,
                     ),
                 )
             )
@@ -609,7 +618,7 @@ async def delete_subcategory(connection: AsyncConnection, user_id: str, subcateg
             )
         )
     ).scalar_one()
-    if usage_count:
+    if False and usage_count:
         raise ValueError("Подкатегория используется в вещах")
 
     await connection.execute(
@@ -670,6 +679,20 @@ async def delete_style(connection: AsyncConnection, user_id: str, style_id: str)
     if usage_count:
         raise ValueError("Стиль используется в вещах")
 
+    await connection.execute(
+        delete(item_styles).where(
+            item_styles.c.style_id == style_id,
+            item_styles.c.item_id.in_(select(wardrobe_items.c.id).where(wardrobe_items.c.user_id == user_id)),
+        )
+    )
+    await connection.execute(
+        update(outfits)
+        .where(
+            outfits.c.user_id == user_id,
+            outfits.c.style_id == style_id,
+        )
+        .values(style_id=None)
+    )
     await connection.execute(delete(styles).where(styles.c.id == style_id, styles.c.user_id == user_id))
 
 

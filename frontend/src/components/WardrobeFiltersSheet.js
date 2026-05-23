@@ -47,6 +47,7 @@ export default function WardrobeFiltersSheet({
   options,
   allowCatalog = true,
   allowCategory = true,
+  showOutfitParticipation = true,
 }) {
   const { spacing } = useAppTheme();
 
@@ -125,29 +126,41 @@ export default function WardrobeFiltersSheet({
         value={filters.season}
         onToggle={(value) => toggleArrayValue("season", value)}
       />
-      <FilterSection title="Стиль" options={options.styles} value={filters.style} onToggle={(value) => toggleArrayValue("style", value)} />
-      <FilterSection title="Бренд" options={options.brands} value={filters.brand} onToggle={(value) => toggleArrayValue("brand", value)} />
+      <FilterSection
+        title="Стиль"
+        options={options.styles}
+        value={filters.style}
+        onToggle={(value) => toggleArrayValue("style", value)}
+      />
+      <FilterSection
+        title="Бренд"
+        options={options.brands}
+        value={filters.brand}
+        onToggle={(value) => toggleArrayValue("brand", value)}
+      />
       <FilterSection
         title="Статус"
         options={options.statuses}
         value={filters.status}
         onToggle={(value) => toggleArrayValue("status", value)}
       />
-      <FilterSection
-        title="Участие в образах"
-        options={[
-          { id: "withOutfits", title: "Есть в образах" },
-          { id: "withoutOutfits", title: "Пока не используется" },
-        ]}
-        value={filters.outfitParticipation}
-        onToggle={(value) =>
-          onChangeFilters({
-            ...filters,
-            outfitParticipation: filters.outfitParticipation === value ? "" : value,
-          })
-        }
-        single
-      />
+      {showOutfitParticipation ? (
+        <FilterSection
+          title="Участие в образах"
+          options={[
+            { id: "withOutfits", title: "Есть в образах" },
+            { id: "withoutOutfits", title: "Пока не используется" },
+          ]}
+          value={filters.outfitParticipation}
+          onToggle={(value) =>
+            onChangeFilters({
+              ...filters,
+              outfitParticipation: filters.outfitParticipation === value ? "" : value,
+            })
+          }
+          single
+        />
+      ) : null}
     </SheetModal>
   );
 }

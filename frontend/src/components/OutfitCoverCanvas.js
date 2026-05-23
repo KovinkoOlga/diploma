@@ -37,7 +37,7 @@ export default function OutfitCoverCanvas({
         aspectRatio: canvas.width / canvas.height,
         borderRadius: radius.xl,
         backgroundColor: backgroundColor ?? (canvas.previewBackground || "#FFFFFF"),
-        borderWidth: showFrame ? StyleSheet.hairlineWidth : 0,
+        borderWidth: showFrame ? 1 : 0,
         borderColor: colors.border,
         overflow: "hidden",
       }}

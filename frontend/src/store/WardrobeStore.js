@@ -40,6 +40,7 @@ export function WardrobeProvider({ children }) {
   const [dictionaryBrands, setDictionaryBrands] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [outfits, setOutfits] = useState([]);
+  const [outfitCollections, setOutfitCollections] = useState([]);
   const [outfitDraftSessions, setOutfitDraftSessions] = useState({});
   const [feedPosts, setFeedPosts] = useState([]);
   const [homeContent, setHomeContent] = useState(null);
@@ -85,6 +86,12 @@ export function WardrobeProvider({ children }) {
     return nextOutfits;
   }, []);
 
+  const refreshOutfitCollections = useCallback(async () => {
+    const nextCollections = await outfitsApi.fetchOutfitCollections();
+    setOutfitCollections(nextCollections ?? []);
+    return nextCollections;
+  }, []);
+
   const refreshContent = useCallback(async () => {
     const [nextFeed, nextHome] = await Promise.all([contentApi.fetchFeed(), contentApi.fetchHomeContent()]);
     setFeedPosts(nextFeed ?? []);
@@ -100,13 +107,14 @@ export function WardrobeProvider({ children }) {
       await refreshDictionaries();
       await refreshItems();
       await refreshOutfits();
+      await refreshOutfitCollections();
       await refreshContent();
     } catch (requestError) {
       setError(requestError.message || "Не удалось загрузить шкаф");
     } finally {
       setLoading(false);
     }
-  }, [refreshBootstrap, refreshContent, refreshDictionaries, refreshItems, refreshOutfits]);
+  }, [refreshBootstrap, refreshContent, refreshDictionaries, refreshItems, refreshOutfitCollections, refreshOutfits]);
 
   useEffect(() => {
     refreshAll();
@@ -254,6 +262,7 @@ export function WardrobeProvider({ children }) {
       refreshDictionaries,
       refreshItems,
       refreshOutfits,
+      refreshOutfitCollections,
       refreshContent,
       async addItem(draft) {
         const saved = await wardrobeApi.createItem(draft);
@@ -388,7 +397,7 @@ export function WardrobeProvider({ children }) {
       },
       async deleteStyle(styleId) {
         await wardrobeApi.deleteStyle(styleId);
-        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems()]);
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshItems(), refreshOutfits()]);
       },
       async renameBrand(brandId, name) {
         const entry = await wardrobeApi.updateBrand(brandId, name.trim());
@@ -406,6 +415,7 @@ export function WardrobeProvider({ children }) {
               itemIds: outfitDraft.itemIds,
               tags: outfitDraft.tags,
               season: outfitDraft.season,
+              collectionIds: outfitDraft.collectionIds ?? [],
               description: outfitDraft.description ?? "",
               coverMode: outfitDraft.coverMode ?? "none",
               coverFileId: outfitDraft.coverFileId ?? null,
@@ -416,6 +426,7 @@ export function WardrobeProvider({ children }) {
               itemIds: outfitDraft.itemIds,
               tags: outfitDraft.tags,
               season: outfitDraft.season,
+              collectionIds: outfitDraft.collectionIds ?? [],
               description: outfitDraft.description ?? "",
               coverMode: outfitDraft.coverMode ?? "none",
               coverFileId: outfitDraft.coverFileId ?? null,
@@ -429,12 +440,53 @@ export function WardrobeProvider({ children }) {
           copy[index] = saved;
           return copy;
         });
+        await Promise.all([refreshBootstrap(), refreshDictionaries(), refreshOutfitCollections()]);
         return saved;
       },
       async deleteOutfit(outfitId) {
         await outfitsApi.deleteOutfit(outfitId);
         animate();
         setOutfits((prev) => prev.filter((outfit) => outfit.id !== outfitId));
+      },
+      async addOutfitCollection(title) {
+        const saved = await outfitsApi.createOutfitCollection({ title });
+        animate();
+        setOutfitCollections((prev) => [...prev, saved]);
+        return saved;
+      },
+      async updateOutfitCollection(collectionId, patch) {
+        const saved = await outfitsApi.updateOutfitCollection(collectionId, patch);
+        animate();
+        setOutfitCollections((prev) => prev.map((entry) => (entry.id === collectionId ? saved : entry)));
+        setOutfits((prev) =>
+          prev.map((outfit) => ({
+            ...outfit,
+            collections: (outfit.collections ?? []).map((entry) =>
+              entry.id === collectionId ? { ...entry, title: saved.title } : entry
+            ),
+          }))
+        );
+        return saved;
+      },
+      async deleteOutfitCollection(collectionId) {
+        await outfitsApi.deleteOutfitCollection(collectionId);
+        animate();
+        setOutfitCollections((prev) => prev.filter((entry) => entry.id !== collectionId));
+        setOutfits((prev) =>
+          prev.map((outfit) => ({
+            ...outfit,
+            collectionIds: (outfit.collectionIds ?? []).filter((entry) => entry !== collectionId),
+            collections: (outfit.collections ?? []).filter((entry) => entry.id !== collectionId),
+          }))
+        );
+      },
+      async addOutfitsToCollection(collectionId, outfitIds) {
+        await outfitsApi.addOutfitsToCollection(collectionId, outfitIds);
+        await Promise.all([refreshOutfits(), refreshOutfitCollections()]);
+      },
+      async removeOutfitFromCollection(collectionId, outfitId) {
+        await outfitsApi.removeOutfitFromCollection(collectionId, outfitId);
+        await Promise.all([refreshOutfits(), refreshOutfitCollections()]);
       },
       async uploadOutfitCover(payload) {
         return outfitsApi.uploadOutfitCover(payload);
@@ -477,6 +529,7 @@ export function WardrobeProvider({ children }) {
       refreshContent,
       refreshDictionaries,
       refreshItems,
+      refreshOutfitCollections,
       refreshOutfits,
       refreshPhotoBatchEntryState,
       retryPhotoBatchEntryState,
@@ -497,6 +550,7 @@ export function WardrobeProvider({ children }) {
       dictionaryBrands,
       templates,
       outfits,
+      outfitCollections,
       outfitDraftSessions,
       feedPosts,
       homeContent,
@@ -518,6 +572,7 @@ export function WardrobeProvider({ children }) {
       homeContent,
       items,
       loading,
+      outfitCollections,
       outfitDraftSessions,
       outfits,
       photoBatch,

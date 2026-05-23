@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Text, View } from "react-native";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import { manipulateAsync } from "expo-image-manipulator";
 import Screen from "../../components/Screen";
@@ -16,12 +16,14 @@ import {
 } from "../../utils/outfitCover";
 import { preloadOutfitCoverImages } from "../../utils/preloadOutfitImages";
 
+const HISTORY_LIMIT = 20;
+
 function cloneState(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
 export default function OutfitCoverEditorScreen({ navigation, route }) {
-  const { typography, colors, spacing } = useAppTheme();
+  const { typography, colors, spacing, radius } = useAppTheme();
   const { items, outfitDraftSessions, actions } = useWardrobe();
   const sessionId = route.params?.draftSessionId;
   const draft = sessionId ? outfitDraftSessions[sessionId] : null;
@@ -29,6 +31,7 @@ export default function OutfitCoverEditorScreen({ navigation, route }) {
 
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState([]);
+  const [redoHistory, setRedoHistory] = useState([]);
   const [preparingImages, setPreparingImages] = useState(true);
   const [imagesFailed, setImagesFailed] = useState([]);
   const [prepareTick, setPrepareTick] = useState(0);
@@ -39,6 +42,109 @@ export default function OutfitCoverEditorScreen({ navigation, route }) {
 
   const exportCoverRef = useRef(null);
   const transparentRef = useRef(null);
+
+  const remember = () => {
+    setHistory((current) => [...current.slice(-(HISTORY_LIMIT - 1)), cloneState(editorState)]);
+    setRedoHistory([]);
+  };
+
+  const mutateState = (updater) => {
+    setEditorState((current) => updater(current));
+  };
+
+  const onUndo = () => {
+    if (!history.length) return;
+    const previous = history[history.length - 1];
+    setRedoHistory((current) => [...current.slice(-(HISTORY_LIMIT - 1)), cloneState(editorState)]);
+    setHistory((current) => current.slice(0, -1));
+    setEditorState(previous);
+  };
+
+  const onRedo = () => {
+    if (!redoHistory.length) return;
+    const next = redoHistory[redoHistory.length - 1];
+    setHistory((current) => [...current.slice(-(HISTORY_LIMIT - 1)), cloneState(editorState)]);
+    setRedoHistory((current) => current.slice(0, -1));
+    setEditorState(next);
+  };
+
+  const onSave = async () => {
+    if (!editorState.objects.length) {
+      Alert.alert("Обложка", "Добавьте хотя бы один объект на обложку.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const coverUri = await captureRef(exportCoverRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+      const transparentUri = await captureRef(transparentRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+      const thumb = await manipulateAsync(coverUri, [{ resize: { width: 640 } }], { compress: 0.9, format: "jpeg" });
+
+      const uploaded = await actions.uploadOutfitCover({
+        mode: "composition",
+        coverAsset: { uri: coverUri, name: "outfit-cover.png", type: "image/png" },
+        transparentAsset: {
+          uri: transparentUri,
+          name: "outfit-cover-transparent.png",
+          type: "image/png",
+        },
+        thumbnailAsset: { uri: thumb.uri, name: "outfit-cover-thumb.jpg", type: "image/jpeg" },
+      });
+
+      const coverTransparentImage = uploaded.coverTransparentImageUrl ? { uri: uploaded.coverTransparentImageUrl } : null;
+      const coverImage = uploaded.coverImageUrl ? { uri: uploaded.coverImageUrl } : null;
+
+      actions.updateOutfitDraftSession(sessionId, {
+        coverMode: "composition",
+        coverFileId: uploaded.fileId,
+        coverImageUrl: uploaded.coverImageUrl,
+        coverTransparentImageUrl: uploaded.coverTransparentImageUrl,
+        coverImage: coverTransparentImage ?? coverImage,
+        coverTransparentImage,
+        coverEditorStateJson: {
+          ...editorState,
+          mode: "composition",
+        },
+      });
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert("Обложка", error.message || "Не удалось сохранить обложку.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: "Обложка образа",
+      headerRight: () => (
+        <Pressable
+          onPress={onSave}
+          disabled={saving}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            backgroundColor: colors.text,
+            borderRadius: radius.pill,
+            paddingHorizontal: spacing.md,
+            paddingVertical: 8,
+            opacity: saving ? 0.45 : pressed ? 0.6 : 1,
+          })}
+        >
+          <Text style={[typography.button, { color: colors.background }]}>
+            {saving ? "Сохраняем..." : "Сохранить"}
+          </Text>
+        </Pressable>
+      ),
+    });
+  }, [colors.background, colors.text, navigation, onSave, radius.pill, saving, spacing.md, typography.button]);
 
   useEffect(() => {
     if (!draft) return;
@@ -110,9 +216,7 @@ export default function OutfitCoverEditorScreen({ navigation, route }) {
       <Screen padded>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="small" color={colors.text} />
-          <Text style={[typography.body, { color: colors.text, marginTop: spacing.sm }]}>
-            Подготавливаем изображения…
-          </Text>
+          <Text style={[typography.body, { color: colors.text, marginTop: spacing.sm }]}>Подготавливаем изображения...</Text>
           <Text style={[typography.caption, { color: colors.secondaryText, marginTop: 6, textAlign: "center" }]}>
             Загружаем вещи для редактора обложки
           </Text>
@@ -125,9 +229,7 @@ export default function OutfitCoverEditorScreen({ navigation, route }) {
     return (
       <Screen padded>
         <View style={{ flex: 1, justifyContent: "center" }}>
-          <Text style={[typography.body, { color: colors.text }]}>
-            Не удалось подготовить изображения для обложки.
-          </Text>
+          <Text style={[typography.body, { color: colors.text }]}>Не удалось подготовить изображения для обложки.</Text>
           <Text style={[typography.caption, { color: colors.secondaryText, marginTop: spacing.xs }]}>
             Проверьте подключение и попробуйте снова.
           </Text>
@@ -154,83 +256,17 @@ export default function OutfitCoverEditorScreen({ navigation, route }) {
 
   const selectedObject = editorState.objects.find((entry) => entry.itemId === selectedItemId) ?? null;
 
-  const remember = () => {
-    setHistory((current) => [...current.slice(-19), cloneState(editorState)]);
-  };
-
-  const mutateState = (updater) => {
-    setEditorState((current) => updater(current));
-  };
-
-  const onSave = async () => {
-    if (!editorState.objects.length) {
-      Alert.alert("Обложка", "Добавьте хотя бы один объект на обложку.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const coverUri = await captureRef(exportCoverRef, {
-        format: "png",
-        quality: 1,
-        result: "tmpfile",
-      });
-      const transparentUri = await captureRef(transparentRef, {
-        format: "png",
-        quality: 1,
-        result: "tmpfile",
-      });
-      const thumb = await manipulateAsync(coverUri, [{ resize: { width: 640 } }], { compress: 0.9, format: "jpeg" });
-
-      const uploaded = await actions.uploadOutfitCover({
-        mode: "composition",
-        coverAsset: { uri: coverUri, name: "outfit-cover.png", type: "image/png" },
-        transparentAsset: {
-          uri: transparentUri,
-          name: "outfit-cover-transparent.png",
-          type: "image/png",
-        },
-        thumbnailAsset: { uri: thumb.uri, name: "outfit-cover-thumb.jpg", type: "image/jpeg" },
-      });
-
-      const coverTransparentImage = uploaded.coverTransparentImageUrl ? { uri: uploaded.coverTransparentImageUrl } : null;
-      const coverImage = uploaded.coverImageUrl ? { uri: uploaded.coverImageUrl } : null;
-
-      actions.updateOutfitDraftSession(sessionId, {
-        coverMode: "composition",
-        coverFileId: uploaded.fileId,
-        coverImageUrl: uploaded.coverImageUrl,
-        coverTransparentImageUrl: uploaded.coverTransparentImageUrl,
-        coverImage: coverTransparentImage ?? coverImage,
-        coverTransparentImage,
-        coverEditorStateJson: {
-          ...editorState,
-          mode: "composition",
-        },
-      });
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert("Обложка", error.message || "Не удалось сохранить обложку.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <Screen padded contentStyle={{ paddingTop: spacing.sm, paddingBottom: spacing.sm }}>
+    <Screen
+      padded={false}
+      contentStyle={{
+        paddingTop: 0,
+        paddingBottom: 4,
+        paddingHorizontal: spacing.xs,
+      }}
+    >
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text style={[typography.h2, { color: colors.text }]}>Редактор обложки</Text>
-          <ActionButton
-            label={saving ? "Сохраняем..." : "Сохранить"}
-            icon="checkmark-outline"
-            onPress={onSave}
-            disabled={saving}
-            compact
-          />
-        </View>
-
-        <View style={{ flex: 1, marginTop: spacing.sm }}>
+        <View style={{ flex: 1, justifyContent: "center" }}>
           <OutfitCoverCanvas
             editorState={editorState}
             itemById={itemById}
@@ -244,7 +280,7 @@ export default function OutfitCoverEditorScreen({ navigation, route }) {
           />
         </View>
 
-        <View style={{ marginTop: spacing.sm }}>
+        <View style={{ marginTop: spacing.xs }}>
           <OutfitCoverObjectControls
             selectedObject={selectedObject}
             onPatch={(patch) => {
@@ -259,18 +295,19 @@ export default function OutfitCoverEditorScreen({ navigation, route }) {
             onReset={() => {
               if (!selectedItemId) return;
               remember();
-              mutateState((current) => updateCoverObject(current, selectedItemId, { scale: 1, rotation: 0, flipX: false, crop: "none" }));
+              mutateState((current) =>
+                updateCoverObject(current, selectedItemId, {
+                  scale: 1,
+                  rotation: 0,
+                  flipX: false,
+                  crop: "none",
+                })
+              );
             }}
-            onUndo={() => {
-              setHistory((current) => {
-                if (!current.length) return current;
-                const next = current.slice(0, -1);
-                const previous = current[current.length - 1];
-                setEditorState(previous);
-                return next;
-              });
-            }}
+            onUndo={onUndo}
+            onRedo={onRedo}
             canUndo={history.length > 0}
+            canRedo={redoHistory.length > 0}
           />
         </View>
       </View>

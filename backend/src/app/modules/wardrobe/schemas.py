@@ -32,6 +32,7 @@ class DictionaryStyleResponse(BaseModel):
     name: str
     isSystem: bool = False
     itemCount: int = 0
+    outfitCount: int = 0
 
 
 class DictionaryBrandResponse(BaseModel):

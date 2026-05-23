@@ -31,6 +31,7 @@ export default function WardrobeStack() {
         headerTintColor: theme.colors.text,
         headerShadowVisible: false,
         headerBackTitleVisible: false,
+        headerBackButtonDisplayMode: "minimal",
         headerTitleAlign: "center",
         animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.colors.background },

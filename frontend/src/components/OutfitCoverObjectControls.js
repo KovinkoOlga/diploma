@@ -1,42 +1,190 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
+import { MAX_OBJECT_SCALE, MIN_OBJECT_SCALE } from "../utils/outfitCover";
 
-function ToolButton({ icon, label, onPress, active = false, disabled = false, iconStyle }) {
-  const { colors, spacing, radius, typography } = useAppTheme();
+const SCALE_STEP = 0.08;
+const ROTATION_STEP = 8;
+const ROTATION_TRACK_MIN = -180;
+const ROTATION_TRACK_MAX = 180;
+const PANEL_BODY_HEIGHT = 160;
+const FOOTER_HEIGHT = 40;
+const LABEL_WIDTH = 80;
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function TabButton({ label, active, onPress }) {
+  const { colors, radius, spacing, typography } = useAppTheme();
 
   return (
     <Pressable
-      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
+        styles.flexFill,
         {
-          width: 66,
-          minHeight: 58,
-          borderRadius: radius.md,
-          borderWidth: 1,
-          borderColor: active ? colors.text : colors.border,
-          backgroundColor: active ? colors.accentSoft : colors.background,
+          minHeight: 28,
+          borderRadius: radius.pill,
+          paddingHorizontal: spacing.xs,
           alignItems: "center",
           justifyContent: "center",
-          paddingHorizontal: spacing.xs,
-          paddingVertical: 6,
-          opacity: disabled ? 0.35 : pressed ? 0.72 : 1,
-          gap: 2,
+          backgroundColor: active ? colors.chipActiveBackground : "transparent",
+          opacity: pressed ? 0.75 : 1,
         },
       ]}
     >
-      <Ionicons name={icon} size={18} color={colors.text} style={iconStyle} />
-      <Text style={[typography.meta, { color: colors.secondaryText, fontSize: 10 }]} numberOfLines={1}>
+      <Text style={[typography.caption, { color: active ? colors.chipActiveText : colors.secondaryText }]} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
   );
 }
 
-function MiniOptionButton({ icon, label, selected, disabled, onPress }) {
-  const { colors, spacing, radius, typography } = useAppTheme();
+function IconButton({ icon, onPress, disabled, accessibilityLabel, mirrored = false }) {
+  const { colors, radius } = useAppTheme();
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      hitSlop={8}
+      style={({ pressed }) => [
+        {
+          width: 34,
+          height: 34,
+          borderRadius: radius.pill,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.background,
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: disabled ? 0.35 : pressed ? 0.72 : 1,
+        },
+      ]}
+    >
+      <Ionicons name={icon} size={17} color={colors.text} style={mirrored ? styles.mirroredIcon : undefined} />
+    </Pressable>
+  );
+}
+
+function AdjustTrack({ progress, disabled }) {
+  const { colors } = useAppTheme();
+  const clampedProgress = clamp(progress, 0, 1);
+
+  return (
+    <View style={styles.trackWrap}>
+      <View
+        style={{
+          height: 4,
+          borderRadius: 999,
+          backgroundColor: colors.divider,
+          overflow: "hidden",
+          justifyContent: "center",
+        }}
+      >
+        <View
+          style={{
+            position: "absolute",
+            left: `${clampedProgress * 100}%`,
+            marginLeft: -5.5,
+            width: 11,
+            height: 11,
+            borderRadius: 999,
+            backgroundColor: colors.text,
+            opacity: disabled ? 0.35 : 1,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
+function InlineAdjustRow({ label, value, progress, onDecrease, onIncrease, disabled }) {
+  const { colors, spacing, typography } = useAppTheme();
+
+  return (
+    <View style={[styles.adjustRow, { gap: spacing.xs }]}>
+      <Text style={[typography.body, { color: colors.text, width: LABEL_WIDTH }]} numberOfLines={1}>
+        {label}
+      </Text>
+      <IconButton icon="remove-outline" disabled={disabled} onPress={onDecrease} accessibilityLabel={`${label} минус`} />
+      <AdjustTrack progress={progress} disabled={disabled} />
+      <IconButton icon="add-outline" disabled={disabled} onPress={onIncrease} accessibilityLabel={`${label} плюс`} />
+      <Text style={[typography.caption, styles.valueLabel, { color: colors.secondaryText }]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function OptionChip({ icon, label, selected, disabled, onPress, mirrored = false, stacked = false, iconAlign = "center" }) {
+  const { colors, radius, spacing, typography } = useAppTheme();
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.flexFill,
+        {
+          minHeight: stacked ? 54 : 30,
+          borderRadius: radius.pill,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: selected ? colors.chipActiveBackground : colors.border,
+          backgroundColor: selected ? colors.chipActiveBackground : colors.background,
+          paddingHorizontal: spacing.xs,
+          paddingVertical: stacked ? 5 : 0,
+          flexDirection: stacked ? "column" : "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: icon ? (stacked ? 2 : spacing.xs) : 0,
+          opacity: disabled ? 0.35 : pressed ? 0.72 : 1,
+        },
+      ]}
+    >
+        {icon ? (
+          <Ionicons
+            name={icon}
+            size={15}
+            color={selected ? colors.chipActiveText : colors.text}
+            style={[
+              mirrored ? styles.mirroredIcon : undefined,
+              stacked
+                ? iconAlign === "start"
+                  ? styles.iconGlyphStart
+                  : iconAlign === "end"
+                    ? styles.iconGlyphEnd
+                    : styles.iconGlyphCenter
+                : undefined,
+              ]}
+          />
+        ) : null}
+      <Text
+        numberOfLines={1}
+        style={[
+            typography.meta,
+            { color: selected ? colors.chipActiveText : colors.text },
+            stacked
+              ? iconAlign === "start"
+                ? styles.iconTextStart
+                : iconAlign === "end"
+                  ? styles.iconTextEnd
+                  : styles.iconTextCenter
+              : undefined,
+          ]}
+        >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function LabeledActionButton({ icon, label, onPress, disabled = false }) {
+  const { colors, radius, spacing, typography } = useAppTheme();
 
   return (
     <Pressable
@@ -44,13 +192,12 @@ function MiniOptionButton({ icon, label, selected, disabled, onPress }) {
       onPress={onPress}
       style={({ pressed }) => [
         {
-          minWidth: 98,
-          borderRadius: radius.md,
-          borderWidth: 1,
-          borderColor: selected ? colors.text : colors.border,
-          backgroundColor: selected ? colors.accentSoft : colors.background,
-          paddingHorizontal: spacing.sm,
-          paddingVertical: 7,
+          height: FOOTER_HEIGHT,
+          borderRadius: radius.pill,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.background,
+          paddingHorizontal: spacing.md,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
@@ -59,8 +206,41 @@ function MiniOptionButton({ icon, label, selected, disabled, onPress }) {
         },
       ]}
     >
-      <Ionicons name={icon} size={16} color={colors.text} />
+      <Ionicons name={icon} size={15} color={colors.text} />
       <Text style={[typography.meta, { color: colors.text }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function LayerButton({ icon, label, onPress, disabled }) {
+  const { colors, radius, spacing, typography } = useAppTheme();
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.flexFill,
+        {
+          minHeight: 50,
+          borderRadius: radius.md,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          backgroundColor: colors.background,
+          paddingHorizontal: spacing.sm,
+          paddingVertical: spacing.sm,
+          opacity: disabled ? 0.35 : pressed ? 0.72 : 1,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          gap: 6,
+        },
+      ]}
+    >
+      <Ionicons name={icon} size={15} color={colors.text} />
+      <Text style={[typography.meta, { color: colors.text }]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -71,28 +251,36 @@ export default function OutfitCoverObjectControls({
   onReorder,
   onReset,
   onUndo,
+  onRedo,
   canUndo,
+  canRedo,
 }) {
-  const { spacing, typography, colors, radius } = useAppTheme();
-  const [menu, setMenu] = useState(null);
+  const { colors, spacing, radius, typography } = useAppTheme();
+  const [tab, setTab] = useState("position");
 
   const hasSelection = Boolean(selectedObject);
+  const scaleValue = selectedObject?.scale ?? 1;
+  const rotationValue = selectedObject?.rotation ?? 0;
+  const isFlipped = Boolean(selectedObject?.flipX);
 
-  const cropOptions = useMemo(
-    () => [
-      { id: "none", label: "Без", icon: "square-outline", selected: selectedObject?.crop === "none" },
-      { id: "left-half", label: "Лево", icon: "caret-back-outline", selected: selectedObject?.crop === "left-half" },
-      { id: "right-half", label: "Право", icon: "caret-forward-outline", selected: selectedObject?.crop === "right-half" },
-    ],
-    [selectedObject?.crop]
-  );
+  const cropOptions = [
+    { id: "left-half", label: "Левая часть", icon: "scan-outline", iconAlign: "start" },
+    { id: "none", label: "Целиком", icon: "square-outline" },
+    { id: "right-half", label: "Правая часть", icon: "scan-outline", mirrored: true, iconAlign: "end" },
+  ];
 
   const layerOptions = [
-    { id: "front", label: "Вперед", icon: "arrow-up-outline" },
-    { id: "back", label: "Назад", icon: "arrow-down-outline" },
+    { id: "front", label: "На передний план", icon: "arrow-up-circle-outline" },
+    { id: "back", label: "На задний план", icon: "arrow-down-circle-outline" },
     { id: "up", label: "Выше", icon: "chevron-up-outline" },
     { id: "down", label: "Ниже", icon: "chevron-down-outline" },
   ];
+
+  const scaleProgress = hasSelection ? (scaleValue - MIN_OBJECT_SCALE) / (MAX_OBJECT_SCALE - MIN_OBJECT_SCALE) : 0.5;
+  const rotationProgress = hasSelection
+    ? (clamp(rotationValue, ROTATION_TRACK_MIN, ROTATION_TRACK_MAX) - ROTATION_TRACK_MIN) /
+      (ROTATION_TRACK_MAX - ROTATION_TRACK_MIN)
+    : 0.5;
 
   const patch = (value) => {
     if (!hasSelection) return;
@@ -102,122 +290,197 @@ export default function OutfitCoverObjectControls({
   return (
     <View
       style={{
-        marginTop: spacing.sm,
         borderRadius: radius.lg,
-        borderWidth: 1,
+        borderWidth: StyleSheet.hairlineWidth,
         borderColor: colors.border,
         backgroundColor: colors.secondaryBackground,
-        paddingVertical: spacing.xs,
+        padding: spacing.xs,
+        gap: spacing.xs,
       }}
     >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: spacing.xs,
-          gap: spacing.xs,
+      <View
+        style={{
+          flexDirection: "row",
           alignItems: "center",
+          gap: 4,
+          borderRadius: radius.pill,
+          backgroundColor: colors.background,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: colors.border,
+          padding: 2,
         }}
       >
-        <ToolButton
-          icon="add-outline"
-          label="Scale+"
-          disabled={!hasSelection}
-          onPress={() => patch({ scale: (selectedObject?.scale ?? 1) + 0.08 })}
-        />
-        <ToolButton
-          icon="remove-outline"
-          label="Scale-"
-          disabled={!hasSelection}
-          onPress={() => patch({ scale: (selectedObject?.scale ?? 1) - 0.08 })}
-        />
-        <ToolButton
-          icon="refresh-outline"
-          label="Rot+"
-          disabled={!hasSelection}
-          onPress={() => patch({ rotation: (selectedObject?.rotation ?? 0) + 8 })}
-        />
-        <ToolButton
-          icon="refresh-outline"
-          label="Rot-"
-          iconStyle={styles.flippedIcon}
-          disabled={!hasSelection}
-          onPress={() => patch({ rotation: (selectedObject?.rotation ?? 0) - 8 })}
-        />
-        <ToolButton
-          icon="swap-horizontal-outline"
-          label="Flip"
-          disabled={!hasSelection}
-          onPress={() => patch({ flipX: !selectedObject?.flipX })}
-        />
-        <ToolButton
-          icon="cut-outline"
-          label="Crop"
-          active={menu === "crop"}
-          disabled={!hasSelection}
-          onPress={() => setMenu((current) => (current === "crop" ? null : "crop"))}
-        />
-        <ToolButton
-          icon="layers-outline"
-          label="Layer"
-          active={menu === "layer"}
-          disabled={!hasSelection}
-          onPress={() => setMenu((current) => (current === "layer" ? null : "layer"))}
-        />
-        <ToolButton icon="refresh-circle-outline" label="Reset" disabled={!hasSelection} onPress={onReset} />
-        <ToolButton icon="arrow-undo-outline" label="Undo" disabled={!canUndo} onPress={onUndo} />
-      </ScrollView>
+        <TabButton label="Положение" active={tab === "position"} onPress={() => setTab("position")} />
+        <TabButton label="Отображение" active={tab === "display"} onPress={() => setTab("display")} />
+        <TabButton label="Слои" active={tab === "layers"} onPress={() => setTab("layers")} />
+      </View>
 
-      {menu === "crop" && hasSelection ? (
-        <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.xs, gap: spacing.xs }}>
-          <Text style={[typography.meta, { color: colors.secondaryText }]}>Обрезка</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
-            {cropOptions.map((option) => (
-              <MiniOptionButton
-                key={option.id}
-                icon={option.icon}
-                label={option.label}
-                selected={option.selected}
-                onPress={() => {
-                  onPatch?.({ crop: option.id });
-                  setMenu(null);
-                }}
+      <View style={{ height: PANEL_BODY_HEIGHT, justifyContent: "space-between" }}>
+        <View style={{ flex: 1, justifyContent: tab === "display" ? "center" : "flex-start", gap: 4 }}>
+          {!hasSelection ? (
+            <Text style={[typography.meta, { color: colors.secondaryText }]}>Выберите вещь на холсте</Text>
+          ) : null}
+
+          {tab === "position" ? (
+            <View style={{ gap: 8 }}>
+              <InlineAdjustRow
+                label="Масштаб"
+                value={hasSelection ? `${Math.round(scaleValue * 100)}%` : "—"}
+                progress={scaleProgress}
+                disabled={!hasSelection}
+                onDecrease={() => patch({ scale: scaleValue - SCALE_STEP })}
+                onIncrease={() => patch({ scale: scaleValue + SCALE_STEP })}
               />
-            ))}
+              <InlineAdjustRow
+                label="Поворот"
+                value={hasSelection ? `${Math.round(rotationValue)}°` : "—"}
+                progress={rotationProgress}
+                disabled={!hasSelection}
+                onDecrease={() => patch({ rotation: rotationValue - ROTATION_STEP })}
+                onIncrease={() => patch({ rotation: rotationValue + ROTATION_STEP })}
+              />
+              <View style={[styles.rowCenter, { gap: spacing.xs, minHeight: 28, marginBottom: 4 }]}>
+                <Text style={[typography.body, { color: colors.text, width: LABEL_WIDTH }]} numberOfLines={1}>
+                  Отразить
+                </Text>
+                <OptionChip
+                  icon="swap-horizontal-outline"
+                  label="По вертикали"
+                  selected={isFlipped}
+                  disabled={!hasSelection}
+                  onPress={() => onPatch?.({ flipX: !Boolean(selectedObject?.flipX) })}
+                />
+                <OptionChip
+                  icon="swap-vertical-outline"
+                  label="По горизонтали"
+                  selected={false}
+                  disabled={!hasSelection}
+                  onPress={() =>
+                    patch({
+                      flipX: !Boolean(selectedObject?.flipX),
+                      rotation: (Number(selectedObject?.rotation) || 0) + 180,
+                    })
+                  }
+                />
+              </View>
+            </View>
+          ) : null}
+
+          {tab === "display" ? (
+            <View style={[styles.rowCenter, styles.displayCenterRow, { gap: 6 }]}>
+              {cropOptions.map((option) => (
+                <OptionChip
+                    key={option.id}
+                    icon={option.icon}
+                    mirrored={option.mirrored}
+                    iconAlign={option.iconAlign}
+                    stacked
+                    selected={selectedObject?.crop === option.id}
+                    disabled={!hasSelection}
+                  label={option.label}
+                  onPress={() => patch({ crop: option.id })}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {tab === "layers" ? (
+            <View style={{ gap: 6 }}>
+              <View style={[styles.rowCenter, { gap: 6 }]}>
+                {layerOptions.slice(0, 2).map((option) => (
+                  <LayerButton
+                    key={option.id}
+                    icon={option.icon}
+                    label={option.label}
+                    disabled={!hasSelection}
+                    onPress={() => onReorder?.(option.id)}
+                  />
+                ))}
+              </View>
+              <View style={[styles.rowCenter, { gap: 6 }]}>
+                {layerOptions.slice(2).map((option) => (
+                  <LayerButton
+                    key={option.id}
+                    icon={option.icon}
+                    label={option.label}
+                    disabled={!hasSelection}
+                    onPress={() => onReorder?.(option.id)}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.rowSpaceBetween}>
+          <LabeledActionButton icon="refresh-circle-outline" label="Сброс" disabled={!hasSelection} onPress={onReset} />
+
+          <View style={[styles.rowCenter, { gap: spacing.xs }]}>
+            <IconButton icon="arrow-undo-outline" disabled={!canUndo} onPress={onUndo} accessibilityLabel="Шаг назад" />
+            <IconButton icon="arrow-redo-outline" disabled={!canRedo} onPress={onRedo} accessibilityLabel="Шаг вперед" />
           </View>
         </View>
-      ) : null}
-
-      {menu === "layer" && hasSelection ? (
-        <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.xs, gap: spacing.xs }}>
-          <Text style={[typography.meta, { color: colors.secondaryText }]}>Порядок слоя</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
-            {layerOptions.map((option) => (
-              <MiniOptionButton
-                key={option.id}
-                icon={option.icon}
-                label={option.label}
-                onPress={() => {
-                  onReorder?.(option.id);
-                  setMenu(null);
-                }}
-              />
-            ))}
-          </View>
-        </View>
-      ) : null}
-
-      {!hasSelection ? (
-        <View style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.xs }}>
-          <Text style={[typography.caption, { color: colors.secondaryText }]}>Выберите вещь на полотне, чтобы редактировать.</Text>
-        </View>
-      ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  flippedIcon: {
+  flexFill: {
+    flex: 1,
+  },
+  trackWrap: {
+    flex: 1,
+    minWidth: 28,
+  },
+  rowCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rowSpaceBetween: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  valueLabel: {
+    width: 42,
+    textAlign: "right",
+  },
+  adjustRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 28,
+    width: "100%",
+  },
+  displayCenterRow: {
+    justifyContent: "center",
+  },
+  iconGlyphStart: {
+    alignSelf: "flex-start",
+    marginLeft: 8,
+  },
+  iconGlyphCenter: {
+    alignSelf: "center",
+  },
+  iconGlyphEnd: {
+    alignSelf: "flex-end",
+    marginRight: 8,
+  },
+  iconTextStart: {
+    width: "100%",
+    textAlign: "left",
+    paddingLeft: 8,
+  },
+  iconTextCenter: {
+    width: "100%",
+    textAlign: "center",
+  },
+  iconTextEnd: {
+    width: "100%",
+    textAlign: "right",
+    paddingRight: 8,
+  },
+  mirroredIcon: {
     transform: [{ scaleX: -1 }],
   },
 });

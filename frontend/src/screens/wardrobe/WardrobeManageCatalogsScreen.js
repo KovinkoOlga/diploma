@@ -8,6 +8,7 @@ import SegmentedControl from "../../components/SegmentedControl";
 import SheetModal from "../../components/SheetModal";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { useAppTheme } from "../../theme/ThemeProvider";
+import { formatOutfitCount } from "../../utils/outfits";
 import { formatWardrobeItemCount } from "../../utils/wardrobe";
 
 const SECTION_OPTIONS = [
@@ -39,6 +40,13 @@ function DictionaryCard({ title, subtitle, meta, onRename, onDelete }) {
       </View>
     </View>
   );
+}
+
+function buildStyleMeta(entry) {
+  const parts = [];
+  if (typeof entry.itemCount === "number") parts.push(formatWardrobeItemCount(entry.itemCount));
+  if (typeof entry.outfitCount === "number") parts.push(formatOutfitCount(entry.outfitCount));
+  return parts.join(" · ");
 }
 
 export default function WardrobeManageCatalogsScreen() {
@@ -234,7 +242,7 @@ export default function WardrobeManageCatalogsScreen() {
             key={entry.id}
             title={entry.name}
             subtitle={getSubtitle?.(entry) ?? null}
-            meta={typeof entry.itemCount === "number" ? formatWardrobeItemCount(entry.itemCount) : null}
+            meta={mode === "style" ? buildStyleMeta(entry) : typeof entry.itemCount === "number" ? formatWardrobeItemCount(entry.itemCount) : null}
             onRename={() => openRenameModal(mode, entry)}
             onDelete={() => confirmDelete(mode, entry)}
           />

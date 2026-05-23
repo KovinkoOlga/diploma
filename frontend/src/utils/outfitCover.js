@@ -18,6 +18,8 @@ const OBJECT_BASE_WIDTH_HALF = 114;
 const OBJECT_BASE_HEIGHT = 320;
 
 const DEFAULT_CATEGORY_KEY = "default";
+export const MIN_OUTFIT_ITEMS = 2;
+export const OUTFIT_MIN_ITEMS_MESSAGE = "Для образа нужно выбрать минимум 2 вещи";
 
 const CATEGORY_PLACEMENT = {
   tops: { x: 0.48, y: 0.22, initialScale: 1.16, spreadX: 58, spreadY: 28 },

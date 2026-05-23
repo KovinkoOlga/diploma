@@ -3,12 +3,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 import MediaPreview from "./MediaPreview";
 
-export default function GridTile({ image, title, subtitle, badge, onPress }) {
+export default function GridTile({ image, title, subtitle, badge, onPress, containerStyle }) {
   const { colors, typography, radius, spacing } = useAppTheme();
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.9 : 1 }]}>
-      <View>
+      <View style={containerStyle}>
         <MediaPreview source={image} containerStyle={[styles.image, { backgroundColor: colors.secondaryBackground, borderRadius: radius.lg }]} />
         {badge ? (
           <View style={[styles.badge, { backgroundColor: colors.overlay, borderRadius: radius.pill }]}>

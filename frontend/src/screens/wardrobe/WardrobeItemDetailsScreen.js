@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Screen from "../../components/Screen";
 import ActionButton from "../../components/ActionButton";
 import ColorDot from "../../components/ColorDot";
@@ -13,6 +13,7 @@ import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
 import { getStatusMeta } from "../../utils/wardrobe";
 import { formatColorSelectionLabel } from "../../utils/wardrobeColors";
+import { confirmWardrobeDelete } from "../../utils/wardrobeDelete";
 
 function InfoTable({ rows }) {
   const { colors, typography, spacing, radius } = useAppTheme();
@@ -91,17 +92,14 @@ export default function WardrobeItemDetailsScreen({ navigation, route }) {
   }
 
   const confirmDelete = () => {
-    Alert.alert("Удалить вещь?", "Действие нельзя будет отменить.", [
-      { text: "Отмена", style: "cancel" },
-      {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () => {
-          actions.deleteItem(item.id);
-          navigation.goBack();
-        },
+    confirmWardrobeDelete({
+      itemIds: [item.id],
+      outfits,
+      onConfirm: () => {
+        actions.deleteItem(item.id);
+        navigation.goBack();
       },
-    ]);
+    });
   };
 
   const colorNames = formatColorSelectionLabel(item.colorDetails ?? [], "Не указано");

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, FlatList, Text, View } from "react-native";
+import { FlatList, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 import { Routes } from "../navigation/routes";
 import {
@@ -20,6 +20,7 @@ import WardrobeFiltersSheet from "./WardrobeFiltersSheet";
 import WardrobeSortSheet from "./WardrobeSortSheet";
 import SheetModal from "./SheetModal";
 import Chip from "./Chip";
+import { confirmWardrobeDelete } from "../utils/wardrobeDelete";
 
 export default function WardrobeCollectionView({
   navigation,
@@ -109,27 +110,18 @@ export default function WardrobeCollectionView({
   };
 
   const confirmDelete = (itemIds) => {
-    Alert.alert(
-      "Удалить вещи?",
-      itemIds.length > 1
-        ? "Выбранные вещи будут удалены без возможности восстановления."
-        : "Вещь будет удалена без возможности восстановления.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: () => {
-            if (itemIds.length > 1) {
-              actions.bulkDeleteItems(itemIds);
-              exitSelectionMode();
-            } else {
-              actions.deleteItem(itemIds[0]);
-            }
-          },
-        },
-      ]
-    );
+    confirmWardrobeDelete({
+      itemIds,
+      outfits,
+      onConfirm: () => {
+        if (itemIds.length > 1) {
+          actions.bulkDeleteItems(itemIds);
+          exitSelectionMode();
+        } else {
+          actions.deleteItem(itemIds[0]);
+        }
+      },
+    });
   };
 
   const applyBulkUpdate = () => {

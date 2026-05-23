@@ -1,4 +1,5 @@
 import { toISODate } from "./formatDate";
+import { splitSearchTokens } from "./search";
 import { getItemColorNames, resolveColorDetails } from "./wardrobeColors";
 import { buildDefaultItemTitle } from "./wardrobeTitle";
 
@@ -303,7 +304,7 @@ export function matchesWardrobeSearch(item, query, categories, catalogs) {
 
   const category = categories.find((entry) => entry.id === item.categoryId);
   const catalog = catalogs.find((entry) => entry.id === item.catalogId);
-  const fieldTokens = splitToSearchTokens([
+  const fieldTokens = splitSearchTokens([
     item.title,
     category?.title,
     catalog?.title,
@@ -314,7 +315,7 @@ export function matchesWardrobeSearch(item, query, categories, catalogs) {
     ...(item.seasons ?? item.season ?? []),
     ...(item.styles ?? item.tags ?? []),
   ]);
-  const queryTokens = splitToSearchTokens([query]);
+  const queryTokens = splitSearchTokens([query]);
 
   return queryTokens.every((token) =>
     fieldTokens.some((fieldToken) => fieldToken.includes(token) || token.includes(fieldToken))

@@ -237,6 +237,28 @@ outfit_items = Table(
     UniqueConstraint("outfit_id", "item_id", name="uq_outfit_items_outfit_item"),
 )
 
+outfit_collections = Table(
+    "outfit_collections",
+    metadata,
+    Column("id", String(48), primary_key=True),
+    Column("user_id", String(48), ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("name", String(120), nullable=False),
+    Column("normalized_name", String(120), nullable=False),
+    Column("sort_order", Integer, nullable=False, default=0),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint("user_id", "normalized_name", name="uq_outfit_collections_user_name"),
+)
+
+outfit_collection_outfits = Table(
+    "outfit_collection_outfits",
+    metadata,
+    Column("id", String(48), primary_key=True),
+    Column("outfit_id", String(48), ForeignKey("outfits.id", ondelete="CASCADE"), nullable=False),
+    Column("collection_id", String(48), ForeignKey("outfit_collections.id", ondelete="CASCADE"), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint("outfit_id", "collection_id", name="uq_outfit_collection_outfits_pair"),
+)
+
 wardrobe_item_templates = Table(
     "wardrobe_item_templates",
     metadata,
