@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    internal_service_token: str = "change-me-in-local-dev"
+    internal_callback_timeout_seconds: float = 0.35
     bg_model_path: str = "/app/models/background_removal_model.keras"
     bg_enable_stub: bool = False
     bg_img_size: int = 320

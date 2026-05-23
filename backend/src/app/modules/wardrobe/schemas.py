@@ -190,3 +190,18 @@ class DraftResponse(BaseModel):
     maskImageUrl: str | None = None
     maskBitmap: dict[str, Any] | None = None
     mlResult: dict[str, Any] | None = None
+
+
+class InternalDraftProgressPayload(BaseModel):
+    status: Literal[
+        "preparing",
+        "background_removing",
+        "category_recognizing",
+        "colors_extracting",
+        "attributes_suggested",
+        "failed",
+    ]
+    message: str | None = None
+    source: str | None = None
+    event: str | None = None
+    timingsMs: dict[str, int] | None = None

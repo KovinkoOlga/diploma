@@ -60,6 +60,23 @@ from app.modules.wardrobe.taxonomy import SYSTEM_SUBCATEGORIES
 
 PRIMARY_READY_STATUS = "ready"
 PRIMARY_FAILED_STATUS = "failed"
+PRIMARY_QUEUED_STATUS = "queued"
+PRIMARY_PREPARING_STATUS = "preparing"
+PRIMARY_BACKGROUND_REMOVING_STATUS = "background_removing"
+PRIMARY_CATEGORY_RECOGNIZING_STATUS = "category_recognizing"
+PRIMARY_COLORS_EXTRACTING_STATUS = "colors_extracting"
+PRIMARY_ATTRIBUTES_SUGGESTED_STATUS = "attributes_suggested"
+PRIMARY_TERMINAL_STATUSES = frozenset({PRIMARY_READY_STATUS, PRIMARY_FAILED_STATUS})
+INTERNAL_PROGRESS_ALLOWED_STATUSES = frozenset(
+    {
+        PRIMARY_PREPARING_STATUS,
+        PRIMARY_BACKGROUND_REMOVING_STATUS,
+        PRIMARY_CATEGORY_RECOGNIZING_STATUS,
+        PRIMARY_COLORS_EXTRACTING_STATUS,
+        PRIMARY_ATTRIBUTES_SUGGESTED_STATUS,
+        PRIMARY_FAILED_STATUS,
+    }
+)
 CATALOG_NOT_REQUESTED_STATUS = "not_requested"
 CATALOG_QUEUED_STATUS = "queued"
 CATALOG_PROCESSING_STATUS = "processing"
@@ -1167,6 +1184,36 @@ async def _load_draft_row(connection: AsyncConnection, user_id: str, draft_id: s
     return dict(row)
 
 
+async def _load_draft_row_any(connection: AsyncConnection, draft_id: str) -> dict:
+    row = (await connection.execute(select(item_drafts).where(item_drafts.c.id == draft_id))).mappings().first()
+    if row is None:
+        raise LookupError("Draft not found")
+    return dict(row)
+
+
+async def apply_internal_draft_progress(connection: AsyncConnection, draft_id: str, processing_status: str) -> dict:
+    if processing_status not in INTERNAL_PROGRESS_ALLOWED_STATUSES:
+        raise ValueError(f"Unsupported draft processing status: {processing_status}")
+
+    row = await _load_draft_row_any(connection, draft_id)
+    if row["processing_status"] in PRIMARY_TERMINAL_STATUSES:
+        return row
+
+    now = datetime.now(timezone.utc)
+    values = {
+        "processing_status": processing_status,
+        "updated_at": now,
+    }
+    if processing_status == PRIMARY_FAILED_STATUS:
+        values["finished_at"] = now
+    else:
+        values["error_message"] = None
+
+    await connection.execute(update(item_drafts).where(item_drafts.c.id == draft_id).values(**values))
+    row.update(values)
+    return row
+
+
 async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftResponse:
     payload = dict(row.get("suggested_payload_json") or {})
     payload.pop("size", None)
@@ -1376,13 +1423,13 @@ async def create_draft(
             id=draft_id,
             user_id=user_id,
             source_type=source_type,
-            processing_status=PRIMARY_READY_STATUS if is_catalog_source else "contour_preparing",
+            processing_status=PRIMARY_READY_STATUS if is_catalog_source else PRIMARY_QUEUED_STATUS,
             catalog_id=catalog_id,
             original_file_id=file_id,
             processed_file_id=file_id if is_catalog_source else None,
             catalog_processing_status=CATALOG_NOT_REQUESTED_STATUS,
             suggested_payload_json=draft_payload,
-            started_at=datetime.now(timezone.utc) if not is_catalog_source else None,
+            started_at=None if not is_catalog_source else datetime.now(timezone.utc),
             finished_at=datetime.now(timezone.utc) if is_catalog_source else None,
         )
     )

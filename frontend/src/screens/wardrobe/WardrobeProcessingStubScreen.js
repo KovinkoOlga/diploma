@@ -16,16 +16,27 @@ import {
 } from "../../utils/wardrobePhotoBatch";
 
 const steps = [
-  { status: "contour_preparing", title: "Подготавливаем изображение" },
+  { status: "queued", title: "Ожидает обработки" },
+  { status: "preparing", title: "Подготавливаем изображение" },
   { status: "background_removing", title: "Удаляем фон" },
   { status: "category_recognizing", title: "Определяем категорию и подкатегорию" },
   { status: "colors_extracting", title: "Определяем цвета" },
   { status: "attributes_suggested", title: "Готовим карточку вещи" },
+  { status: "ready", title: "Карточка готова" },
 ];
+
+const statusDescriptions = {
+  queued: "Черновик создан и ожидает свободный Celery worker.",
+  preparing: "Подготавливаем изображение и данные для ML-анализа.",
+  background_removing: "Удаляем фон на стороне vision-сервиса.",
+  category_recognizing: "Определяем категорию и подкатегорию вещи.",
+  colors_extracting: "Извлекаем основные цвета из изображения.",
+  attributes_suggested: "Сохраняем вырезанную вещь и собираем карточку для подтверждения.",
+  ready: "Карточка готова. Открываем форму подтверждения.",
+};
 
 function stepDone(currentStatus, stepIndex) {
   if (!currentStatus) return false;
-  if (currentStatus === "ready" || currentStatus === "attributes_suggested") return true;
   const currentIndex = steps.findIndex((step) => step.status === currentStatus);
   return currentIndex >= stepIndex;
 }
@@ -246,6 +257,8 @@ export default function WardrobeProcessingStubScreen({ navigation, route }) {
 
   const currentStatus = currentEntry?.processingStatus ?? draftState?.processingStatus ?? null;
   const ready = Boolean(draftState?.ready);
+  const currentStep = steps.find((step) => step.status === currentStatus) ?? null;
+  const statusDescription = currentStatus ? statusDescriptions[currentStatus] : "";
 
   if (isBatchMode && !batch) {
     return (
@@ -299,12 +312,14 @@ export default function WardrobeProcessingStubScreen({ navigation, route }) {
         ) : null}
         <ActivityIndicator color={colors.text} size="large" />
         <Text style={[typography.h2, { color: colors.text, marginTop: spacing.md, textAlign: "center" }]}>
-          {isWaitingForUpload && currentProgress ? `Загружаем фото ${currentProgress.current} из ${currentProgress.total}` : "Обработка вещи"}
+          {isWaitingForUpload && currentProgress
+            ? `Загружаем фото ${currentProgress.current} из ${currentProgress.total}`
+            : currentStep?.title || "Обработка вещи"}
         </Text>
         <Text style={[typography.body, { color: colors.secondaryText, marginTop: spacing.sm, textAlign: "center" }]}>
           {isWaitingForUpload
-            ? "Создаем черновик и отправляем фото в обработку. Остальные фотографии продолжают загружаться в фоне."
-            : "Анализируем фото: удаляем фон, определяем тип вещи и основные атрибуты."}
+            ? "Создаём черновик и отправляем фото в обработку. Остальные фотографии продолжают загружаться в фоне."
+            : statusDescription || "Анализируем фото и готовим карточку вещи к подтверждению."}
         </Text>
       </View>
 

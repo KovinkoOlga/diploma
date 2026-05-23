@@ -53,7 +53,13 @@ async def health() -> dict:
 
 
 @router.post("/v1/analyze-item-image", response_model=AnalyzeItemImageResponse)
-async def analyze_item_image(image: UploadFile = File(...), palette_json: str = Form("[]")) -> AnalyzeItemImageResponse:
+async def analyze_item_image(
+    image: UploadFile = File(...),
+    draft_id: str = Form(...),
+    progress_callback_url: str = Form(...),
+    progress_token: str = Form(...),
+    palette_json: str = Form("[]"),
+) -> AnalyzeItemImageResponse:
     content = await image.read()
     try:
         raw_palette = json.loads(palette_json or "[]")
@@ -63,6 +69,12 @@ async def analyze_item_image(image: UploadFile = File(...), palette_json: str = 
     except (json.JSONDecodeError, ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=f"Invalid palette_json: {exc}")
     try:
-        return get_image_analysis_service().analyze_item_image(content, color_palette=palette)
+        return get_image_analysis_service().analyze_item_image(
+            content,
+            draft_id=draft_id,
+            progress_callback_url=progress_callback_url,
+            progress_token=progress_token,
+            color_palette=palette,
+        )
     except ClassifierConfigurationError as exc:
         raise HTTPException(status_code=503, detail=str(exc))

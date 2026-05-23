@@ -20,6 +20,9 @@ class ItemImageAnalysisResult:
 async def analyze_item_image(
     image_bytes: bytes,
     *,
+    draft_id: str,
+    progress_callback_url: str,
+    progress_token: str,
     color_palette: list[dict[str, Any]] | None = None,
     filename: str = "image.png",
     mime_type: str = "image/png",
@@ -30,7 +33,12 @@ async def analyze_item_image(
         response = await client.post(
             f"{settings.ml_vision_service_url.rstrip('/')}/v1/analyze-item-image",
             files={"image": (filename, image_bytes, mime_type)},
-            data={"palette_json": json.dumps(color_palette or [], ensure_ascii=False)},
+            data={
+                "draft_id": draft_id,
+                "progress_callback_url": progress_callback_url,
+                "progress_token": progress_token,
+                "palette_json": json.dumps(color_palette or [], ensure_ascii=False),
+            },
         )
     response.raise_for_status()
     payload = response.json()

@@ -11,6 +11,7 @@ from app.modules.auth.routes import router as auth_router
 from app.modules.content.routes import router as content_router
 from app.modules.outfits.routes import router as outfits_router
 from app.modules.users.routes import router as users_router
+from app.modules.wardrobe.internal_routes import router as internal_wardrobe_router
 from app.modules.wardrobe.routes import router as wardrobe_router
 from app.modules.wardrobe.seed import ensure_demo_user
 
@@ -43,6 +44,7 @@ async def health() -> dict[str, str]:
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(internal_wardrobe_router)
 app.include_router(wardrobe_router)
 app.include_router(outfits_router)
 app.include_router(content_router)

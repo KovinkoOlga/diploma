@@ -12,12 +12,17 @@ from app.modules.files.service import (
 )
 from app.modules.ml_clients.vision_client import analyze_item_image
 from app.modules.ml_clients.catalog_client import generate_catalog_image
-from app.modules.wardrobe.service import get_selectable_color_palette
+from app.modules.wardrobe.service import (
+    PRIMARY_ATTRIBUTES_SUGGESTED_STATUS,
+    PRIMARY_FAILED_STATUS,
+    PRIMARY_PREPARING_STATUS,
+    PRIMARY_READY_STATUS,
+    apply_internal_draft_progress,
+    get_selectable_color_palette,
+)
 from app.tasks.celery_app import celery_app, run_async_in_worker
 
 
-PRIMARY_READY_STATUS = "ready"
-PRIMARY_FAILED_STATUS = "failed"
 CATALOG_NOT_REQUESTED_STATUS = "not_requested"
 CATALOG_PROCESSING_STATUS = "processing"
 CATALOG_READY_STATUS = "ready"
@@ -76,6 +81,8 @@ async def run_prepare_item_photo(draft_id: str) -> None:
         draft = await _get_draft_row(draft_id)
         if draft is None:
             return
+        if draft["processing_status"] == PRIMARY_FAILED_STATUS:
+            return
         if draft["processing_status"] == PRIMARY_READY_STATUS and draft.get("processed_file_id") and draft.get("mask_file_id"):
             return
         if not draft.get("original_file_id"):
@@ -93,15 +100,11 @@ async def run_prepare_item_photo(draft_id: str) -> None:
             return
 
         async with engine.begin() as connection:
+            await apply_internal_draft_progress(connection, draft_id, PRIMARY_PREPARING_STATUS)
             await connection.execute(
                 update(item_drafts)
                 .where(item_drafts.c.id == draft_id)
-                .values(
-                    processing_status="background_removing",
-                    error_message=None,
-                    started_at=draft.get("started_at") or datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
-                )
+                .values(started_at=draft.get("started_at") or datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc))
             )
             original_bytes = await get_file_bytes(connection, draft["original_file_id"], "original")
             color_palette = await get_selectable_color_palette(connection)
@@ -122,14 +125,18 @@ async def run_prepare_item_photo(draft_id: str) -> None:
 
         started = datetime.now(timezone.utc)
         filename = await _file_name(draft["original_file_id"])
-        result = await analyze_item_image(original_bytes, filename=filename, color_palette=color_palette)
+        settings = get_settings()
+        callback_base_url = settings.backend_internal_url.rstrip("/")
+        result = await analyze_item_image(
+            original_bytes,
+            draft_id=draft_id,
+            progress_callback_url=f"{callback_base_url}/internal/wardrobe/drafts/{draft_id}/progress",
+            progress_token=settings.internal_service_token,
+            filename=filename,
+            color_palette=color_palette,
+        )
 
         async with engine.begin() as connection:
-            await connection.execute(
-                update(item_drafts)
-                .where(item_drafts.c.id == draft_id)
-                .values(processing_status="category_recognizing", updated_at=datetime.now(timezone.utc))
-            )
             cutout_file_id = draft.get("processed_file_id") or await create_image_file_with_variants(
                 connection,
                 draft["user_id"],
@@ -162,18 +169,14 @@ async def run_prepare_item_photo(draft_id: str) -> None:
                 },
             )
 
-            await connection.execute(
-                update(item_drafts)
-                .where(item_drafts.c.id == draft_id)
-                .values(processing_status="colors_extracting", updated_at=datetime.now(timezone.utc))
-            )
+            await apply_internal_draft_progress(connection, draft_id, PRIMARY_ATTRIBUTES_SUGGESTED_STATUS)
             await connection.execute(
                 update(item_drafts)
                 .where(item_drafts.c.id == draft_id)
                 .values(
                     processed_file_id=cutout_file_id,
                     mask_file_id=mask_file_id,
-                    processing_status="attributes_suggested",
+                    processing_status=PRIMARY_ATTRIBUTES_SUGGESTED_STATUS,
                     suggested_payload_json=payload,
                     ml_result_json=ml_result,
                     updated_at=datetime.now(timezone.utc),

@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     ml_vision_service_url: str = "http://ml-vision-service:8001"
     ml_catalog_service_url: str = "http://ml-catalog-service:8002"
     ml_request_timeout_seconds: int = 300
+    backend_internal_url: str = "http://backend:8000"
+    internal_service_token: str = "change-me-in-local-dev"
 
     cors_origins: str = "http://localhost:8081,http://localhost:19006"
 
