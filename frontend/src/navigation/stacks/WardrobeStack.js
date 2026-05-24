@@ -17,6 +17,7 @@ import WardrobeMaskEditorScreen from "../../screens/wardrobe/WardrobeMaskEditorS
 import WardrobeManageCatalogsScreen from "../../screens/wardrobe/WardrobeManageCatalogsScreen";
 import WardrobeManageCategoriesScreen from "../../screens/wardrobe/WardrobeManageCategoriesScreen";
 import WardrobeArchiveScreen from "../../screens/wardrobe/WardrobeArchiveScreen";
+import WardrobeItemSelectScreen from "../../screens/wardrobe/WardrobeItemSelectScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -69,6 +70,7 @@ export default function WardrobeStack() {
       <Stack.Screen name={Routes.WardrobeManageCatalogs} component={WardrobeManageCatalogsScreen} options={{ title: "Справочники" }} />
       <Stack.Screen name={Routes.WardrobeManageCategories} component={WardrobeManageCategoriesScreen} options={{ title: "Категории" }} />
       <Stack.Screen name={Routes.WardrobeArchive} component={WardrobeArchiveScreen} options={{ title: "Архив" }} />
+      <Stack.Screen name={Routes.WardrobeItemSelect} component={WardrobeItemSelectScreen} options={{ title: "Выбор вещей" }} />
     </Stack.Navigator>
   );
 }

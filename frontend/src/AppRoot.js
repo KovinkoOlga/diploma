@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { enableScreens } from "react-native-screens";
 import { StatusBar } from "expo-status-bar";
@@ -8,6 +8,7 @@ import AuthScreen from "./screens/auth/AuthScreen";
 import { AuthProvider, useAuth } from "./store/AuthStore";
 import { WardrobeProvider } from "./store/WardrobeStore";
 import RootNavigator from "./navigation/RootNavigator";
+import { ensureWeeklyCalendarReminder, registerNotificationResponseHandler } from "./services/notifications";
 
 enableScreens();
 
@@ -15,6 +16,25 @@ function InnerApp() {
   const theme = useAppTheme();
   const { authenticated, bootstrapping } = useAuth();
   const barStyle = useMemo(() => (theme.isDark ? "light" : "dark"), [theme.isDark]);
+
+  useEffect(() => {
+    if (!authenticated) return undefined;
+
+    ensureWeeklyCalendarReminder().catch(() => {});
+
+    let cleanup = null;
+    registerNotificationResponseHandler()
+      .then((dispose) => {
+        cleanup = dispose;
+      })
+      .catch(() => {});
+
+    return () => {
+      if (typeof cleanup === "function") {
+        cleanup();
+      }
+    };
+  }, [authenticated]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

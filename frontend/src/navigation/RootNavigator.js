@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { useAppTheme } from "../theme/ThemeProvider";
+import { navigationRef } from "./navigationRef";
 import TabNavigator from "./TabNavigator";
 
 export default function RootNavigator() {
@@ -23,7 +24,7 @@ export default function RootNavigator() {
   }, [theme]);
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <TabNavigator />
     </NavigationContainer>
   );

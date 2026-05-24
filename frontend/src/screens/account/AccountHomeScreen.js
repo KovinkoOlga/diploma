@@ -7,7 +7,6 @@ import ProfileHeader from "../../components/ProfileHeader";
 import Chip from "../../components/Chip";
 import OutfitCard from "../../components/OutfitCard";
 import WardrobeItemCard from "../../components/WardrobeItemCard";
-import FeedCard from "../../components/FeedCard";
 import EmptyState from "../../components/EmptyState";
 import SectionHeader from "../../components/SectionHeader";
 import { useAppTheme } from "../../theme/ThemeProvider";
@@ -17,18 +16,17 @@ import { Routes } from "../../navigation/routes";
 
 export default function AccountHomeScreen({ navigation }) {
   const { colors, typography, spacing } = useAppTheme();
-  const { items, outfits, feedPosts } = useWardrobe();
+  const { items, outfits, outfitCollections } = useWardrobe();
   const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState("looks");
   const itemById = useMemo(() => Object.fromEntries(items.map((item) => [item.id, item])), [items]);
-  const savedPosts = feedPosts.filter((post) => post.saved);
   const displayName = currentUser?.displayName || currentUser?.email?.split("@")[0] || "Профиль";
   const handle = currentUser?.email ? `@${currentUser.email.split("@")[0]}` : "@profile";
 
   const stats = [
     { label: "вещей", value: items.length },
     { label: "образов", value: outfits.length },
-    { label: "сохранено", value: savedPosts.length },
+    { label: "подборок", value: outfitCollections.length },
   ];
 
   return (
@@ -50,7 +48,8 @@ export default function AccountHomeScreen({ navigation }) {
         avatarSource={currentUser?.avatarUrl ? { uri: currentUser.avatarUrl } : undefined}
         stats={stats}
         onPrimaryPress={() => navigation.navigate(Routes.Settings)}
-        onSecondaryPress={() => navigation.navigate("NewsTab")}
+        onSecondaryPress={() => navigation.navigate("OutfitsTab")}
+        secondaryLabel="Мои образы"
       />
 
       <View style={{ marginTop: spacing.lg }}>
@@ -58,7 +57,7 @@ export default function AccountHomeScreen({ navigation }) {
         <View style={{ flexDirection: "row", gap: 8, marginTop: spacing.sm }}>
           <Chip label="Образы" selected={activeTab === "looks"} onPress={() => setActiveTab("looks")} />
           <Chip label="Вещи" selected={activeTab === "items"} onPress={() => setActiveTab("items")} />
-          <Chip label="Сохранено" selected={activeTab === "saved"} onPress={() => setActiveTab("saved")} />
+          <Chip label="Подборки" selected={activeTab === "collections"} onPress={() => setActiveTab("collections")} />
         </View>
       </View>
 
@@ -76,7 +75,7 @@ export default function AccountHomeScreen({ navigation }) {
             ))}
           </View>
         ) : (
-          <EmptyState icon="bookmark-outline" title="Пока ничего нет" subtitle="Сохраненные образы появятся здесь." />
+          <EmptyState icon="bookmark-outline" title="Пока ничего нет" subtitle="Сохранённые образы появятся здесь." />
         )
       ) : null}
 
@@ -87,7 +86,6 @@ export default function AccountHomeScreen({ navigation }) {
               <WardrobeItemCard
                 key={item.id}
                 item={item}
-                variant="list"
                 onPress={() => navigation.navigate("WardrobeTab", { screen: Routes.ItemDetails, params: { itemId: item.id } })}
               />
             ))}
@@ -97,30 +95,21 @@ export default function AccountHomeScreen({ navigation }) {
         )
       ) : null}
 
-      {activeTab === "saved" ? (
-        <View style={{ marginTop: spacing.md, gap: spacing.md }}>
-          {savedPosts.map((post) => (
-            <FeedCard
-              key={post.id}
-              eyebrow={`${post.category} · ${post.timeAgo}`}
-              title={post.title}
-              summary={post.text}
-              meta={`${post.likes} лайков · ${post.source}`}
-              image={
-                outfits.find((outfit) => outfit.id === post.outfitId)?.coverTransparentImage ??
-                outfits.find((outfit) => outfit.id === post.outfitId)?.coverImage ??
-                itemById[outfits.find((outfit) => outfit.id === post.outfitId)?.itemIds?.[0]]?.image ??
-                items[0]?.image
-              }
-              actionLabel="Открыть"
-              onPress={() => navigation.navigate("NewsTab", { screen: Routes.PostDetails, params: { postId: post.id } })}
-              onActionPress={() => navigation.navigate("NewsTab", { screen: Routes.PostDetails, params: { postId: post.id } })}
-            />
-          ))}
-          {savedPosts.length === 0 ? (
-            <Text style={[typography.body, { color: colors.secondaryText }]}>Пока ничего не сохранено.</Text>
-          ) : null}
-        </View>
+      {activeTab === "collections" ? (
+        outfitCollections.length ? (
+          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+            {outfitCollections.map((collection) => (
+              <View key={collection.id} style={{ padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: 16 }}>
+                <Text style={[typography.cardTitle, { color: colors.text }]}>{collection.title}</Text>
+                <Text style={[typography.body, { color: colors.secondaryText, marginTop: 4 }]}>
+                  {collection.outfitCount} образов
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <EmptyState icon="albums-outline" title="Подборок пока нет" subtitle="Собранные подборки образов появятся здесь." />
+        )
       ) : null}
     </Screen>
   );

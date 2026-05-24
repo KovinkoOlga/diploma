@@ -4,4 +4,11 @@ Starting Metro Bundler
 Waiting on http://localhost:8090
 Logs for your project will appear below.
 iOS .\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
-iOS Bundled 3426ms index.js (1798 modules)
+iOS .\index.js ▓▓░░░░░░░░░░░░░░ 13.6% (28/76)
+iOS .\index.js ▓▓▓▓░░░░░░░░░░░░ 29.7% (213/399)
+iOS .\index.js ▓▓▓▓▓▓▓▓░░░░░░░░ 51.7% (554/784)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 60.9% ( 793/1016)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 66.5% (1035/1269)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 87.2% (1380/1487)
+iOS .\index.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 93.4% (1860/1925)
+iOS Bundled 27103ms index.js (1962 modules)

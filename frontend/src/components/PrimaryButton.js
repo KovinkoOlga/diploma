@@ -9,11 +9,20 @@ export default function PrimaryButton({
   icon,
   variant = "primary",
   disabled = false,
+  scale = 1,
   style,
 }) {
   const { colors, spacing, typography, radius } = useAppTheme();
-
+  const safeScale = Number.isFinite(scale) ? Math.max(scale, 0.5) : 1;
   const palette = getPalette({ colors, variant });
+  const titleStyle = {
+    ...typography.sectionTitle,
+    color: palette.text,
+    fontSize: (typography.sectionTitle?.fontSize ?? 16) * safeScale,
+    lineHeight: typography.sectionTitle?.lineHeight
+      ? typography.sectionTitle.lineHeight * safeScale
+      : undefined,
+  };
 
   return (
     <Pressable
@@ -26,22 +35,22 @@ export default function PrimaryButton({
           backgroundColor: palette.bg,
           borderColor: palette.border,
           borderRadius: radius.pill,
-          paddingVertical: spacing.sm,
-          paddingHorizontal: spacing.md,
+          paddingVertical: spacing.sm * safeScale,
+          paddingHorizontal: spacing.md * safeScale,
         },
         style,
       ]}
     >
       <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <Text style={[typography.sectionTitle, { color: palette.text }]} numberOfLines={1}>
+        <Text style={titleStyle} numberOfLines={1}>
           {title}
         </Text>
         {icon ? (
           <Ionicons
             name={icon}
-            size={16}
+            size={Math.max(12, Math.round(16 * safeScale))}
             color={palette.text}
-            style={{ marginLeft: spacing.xs, opacity: 0.8 }}
+            style={{ marginLeft: spacing.xs * safeScale, opacity: 0.8 }}
           />
         ) : null}
       </View>

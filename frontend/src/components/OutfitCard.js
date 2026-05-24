@@ -23,7 +23,7 @@ function buildSubtitle(outfit, items) {
   return parts.filter(Boolean).join(" · ");
 }
 
-export default function OutfitCard({ outfit, items, onPress }) {
+export default function OutfitCard({ outfit, items, onPress, selected = false }) {
   const { colors, radius, spacing } = useAppTheme();
   const cover = outfit?.coverTransparentImage ?? outfit?.coverImage ?? items?.[0]?.image;
 
@@ -33,8 +33,8 @@ export default function OutfitCard({ outfit, items, onPress }) {
       title={outfit.title}
       subtitle={buildSubtitle(outfit, items)}
       containerStyle={{
-        borderWidth: 1,
-        borderColor: "rgba(17,17,17,0.14)",
+        borderWidth: selected ? 1.5 : 1,
+        borderColor: selected ? colors.text : "rgba(17,17,17,0.14)",
         borderRadius: radius.lg,
         backgroundColor: colors.background,
         padding: spacing.xs,

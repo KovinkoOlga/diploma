@@ -41,6 +41,8 @@ from app.modules.outfits.schemas import (
 router = APIRouter(prefix="/outfits", tags=["outfits"])
 
 MIN_OUTFIT_ITEMS = 2
+OUTFIT_COLLECTION_ID_PREFIX = "outfit_col"
+OUTFIT_COLLECTION_LINK_ID_PREFIX = "outfit_col_link"
 
 
 def normalize_name(value: str) -> str:
@@ -364,7 +366,7 @@ async def _replace_links(
             insert(outfit_collection_outfits),
             [
                 {
-                    "id": new_id("outfit_collection_link"),
+                    "id": new_id(OUTFIT_COLLECTION_LINK_ID_PREFIX),
                     "outfit_id": outfit_id,
                     "collection_id": collection_id,
                 }
@@ -413,7 +415,7 @@ async def create_outfit_collection(
             select(func.count()).select_from(outfit_collections).where(outfit_collections.c.user_id == current_user["id"])
         )
     ).scalar_one()
-    collection_id = new_id("outfit_collection")
+    collection_id = new_id(OUTFIT_COLLECTION_ID_PREFIX)
 
     await connection.execute(
         insert(outfit_collections).values(
@@ -506,7 +508,7 @@ async def add_outfits_to_collection(
                 insert(outfit_collection_outfits),
                 [
                     {
-                        "id": new_id("outfit_collection_link"),
+                        "id": new_id(OUTFIT_COLLECTION_LINK_ID_PREFIX),
                         "outfit_id": outfit_id,
                         "collection_id": collection_id,
                     }

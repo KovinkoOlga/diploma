@@ -14,6 +14,7 @@ export default function ProfileHeader({
   stats,
   onPrimaryPress,
   onSecondaryPress,
+  secondaryLabel = "Поделиться",
 }) {
   const { colors, typography, spacing } = useAppTheme();
 
@@ -34,7 +35,7 @@ export default function ProfileHeader({
 
       <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
         <ActionButton label="Редактировать" variant="secondary" onPress={onPrimaryPress} style={{ flex: 1 }} fullWidth />
-        <ActionButton label="Поделиться" variant="secondary" onPress={onSecondaryPress} style={{ flex: 1 }} fullWidth />
+        <ActionButton label={secondaryLabel} variant="secondary" onPress={onSecondaryPress} style={{ flex: 1 }} fullWidth />
       </View>
     </View>
   );

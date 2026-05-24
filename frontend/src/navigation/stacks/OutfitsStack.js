@@ -7,6 +7,7 @@ import OutfitEditorScreen from "../../screens/outfits/OutfitEditorScreen";
 import OutfitCoverEditorScreen from "../../screens/outfits/OutfitCoverEditorScreen";
 import OutfitsDictionariesScreen from "../../screens/outfits/OutfitsDictionariesScreen";
 import AddOutfitsToCollectionScreen from "../../screens/outfits/AddOutfitsToCollectionScreen";
+import OutfitSelectScreen from "../../screens/outfits/OutfitSelectScreen";
 import { useAppTheme } from "../../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator();
@@ -38,6 +39,7 @@ export default function OutfitsStack() {
         component={AddOutfitsToCollectionScreen}
         options={{ title: "Добавить существующие" }}
       />
+      <Stack.Screen name={Routes.OutfitSelect} component={OutfitSelectScreen} options={{ title: "Выбор образа" }} />
     </Stack.Navigator>
   );
 }

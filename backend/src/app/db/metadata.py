@@ -3,9 +3,11 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
     String,
@@ -296,3 +298,61 @@ item_drafts = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("expires_at", DateTime(timezone=True), nullable=True),
 )
+
+outfit_calendar_entries = Table(
+    "outfit_calendar_entries",
+    metadata,
+    Column("id", String(48), primary_key=True),
+    Column("user_id", String(48), ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("date", Date, nullable=False),
+    Column("outfit_id", String(48), ForeignKey("outfits.id", ondelete="CASCADE"), nullable=True),
+    Column("status", String(24), nullable=False, default="planned"),
+    Column("weather_snapshot_json", JSON, nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint("user_id", "date", name="uq_outfit_calendar_entries_user_date"),
+    CheckConstraint(
+        "status IN ('planned', 'worn', 'skipped')",
+        name="ck_outfit_calendar_entries_status",
+    ),
+)
+
+Index("ix_outfit_calendar_entries_user_date", outfit_calendar_entries.c.user_id, outfit_calendar_entries.c.date)
+
+outfit_wear_logs = Table(
+    "outfit_wear_logs",
+    metadata,
+    Column("id", String(48), primary_key=True),
+    Column("user_id", String(48), ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("outfit_id", String(48), ForeignKey("outfits.id", ondelete="CASCADE"), nullable=False),
+    Column("worn_date", Date, nullable=False),
+    Column("calendar_entry_id", String(48), ForeignKey("outfit_calendar_entries.id", ondelete="SET NULL"), nullable=True),
+    Column("source", String(32), nullable=False),
+    Column("weather_snapshot_json", JSON, nullable=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint(
+        "source IN ('calendar_confirmation', 'manual_outfit', 'weekly_checkin')",
+        name="ck_outfit_wear_logs_source",
+    ),
+)
+
+Index("ix_outfit_wear_logs_user_worn_date", outfit_wear_logs.c.user_id, outfit_wear_logs.c.worn_date)
+
+item_wear_logs = Table(
+    "item_wear_logs",
+    metadata,
+    Column("id", String(48), primary_key=True),
+    Column("user_id", String(48), ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("item_id", String(48), ForeignKey("wardrobe_items.id", ondelete="CASCADE"), nullable=False),
+    Column("outfit_id", String(48), ForeignKey("outfits.id", ondelete="SET NULL"), nullable=True),
+    Column("calendar_entry_id", String(48), ForeignKey("outfit_calendar_entries.id", ondelete="SET NULL"), nullable=True),
+    Column("worn_date", Date, nullable=False),
+    Column("source", String(32), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    CheckConstraint(
+        "source IN ('calendar_confirmation', 'manual_outfit', 'weekly_checkin')",
+        name="ck_item_wear_logs_source",
+    ),
+)
+
+Index("ix_item_wear_logs_user_worn_date", item_wear_logs.c.user_id, item_wear_logs.c.worn_date)

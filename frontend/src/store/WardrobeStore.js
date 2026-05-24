@@ -2,7 +2,6 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { LayoutAnimation, Platform, UIManager } from "react-native";
 import * as wardrobeApi from "../api/wardrobe";
 import * as outfitsApi from "../api/outfits";
-import * as contentApi from "../api/content";
 import {
   PHOTO_BATCH_UPLOAD_CONCURRENCY,
   PHOTO_BATCH_UPLOAD_STATUS,
@@ -42,8 +41,6 @@ export function WardrobeProvider({ children }) {
   const [outfits, setOutfits] = useState([]);
   const [outfitCollections, setOutfitCollections] = useState([]);
   const [outfitDraftSessions, setOutfitDraftSessions] = useState({});
-  const [feedPosts, setFeedPosts] = useState([]);
-  const [homeContent, setHomeContent] = useState(null);
   const [photoBatch, dispatchPhotoBatch] = useReducer(photoBatchReducer, null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -92,13 +89,6 @@ export function WardrobeProvider({ children }) {
     return nextCollections;
   }, []);
 
-  const refreshContent = useCallback(async () => {
-    const [nextFeed, nextHome] = await Promise.all([contentApi.fetchFeed(), contentApi.fetchHomeContent()]);
-    setFeedPosts(nextFeed ?? []);
-    setHomeContent(nextHome ?? null);
-    return { feedPosts: nextFeed, homeContent: nextHome };
-  }, []);
-
   const refreshAll = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -108,13 +98,12 @@ export function WardrobeProvider({ children }) {
       await refreshItems();
       await refreshOutfits();
       await refreshOutfitCollections();
-      await refreshContent();
     } catch (requestError) {
       setError(requestError.message || "Не удалось загрузить шкаф");
     } finally {
       setLoading(false);
     }
-  }, [refreshBootstrap, refreshContent, refreshDictionaries, refreshItems, refreshOutfitCollections, refreshOutfits]);
+  }, [refreshBootstrap, refreshDictionaries, refreshItems, refreshOutfitCollections, refreshOutfits]);
 
   useEffect(() => {
     refreshAll();
@@ -263,7 +252,6 @@ export function WardrobeProvider({ children }) {
       refreshItems,
       refreshOutfits,
       refreshOutfitCollections,
-      refreshContent,
       async addItem(draft) {
         const saved = await wardrobeApi.createItem(draft);
         animate();
@@ -513,10 +501,6 @@ export function WardrobeProvider({ children }) {
           return copy;
         });
       },
-      async togglePostSaved(postId) {
-        const result = await contentApi.toggleFeedSaved(postId);
-        setFeedPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, saved: result.saved } : post)));
-      },
     }),
     [
       advancePhotoBatchEntryState,
@@ -526,7 +510,6 @@ export function WardrobeProvider({ children }) {
       items,
       refreshAll,
       refreshBootstrap,
-      refreshContent,
       refreshDictionaries,
       refreshItems,
       refreshOutfitCollections,
@@ -552,8 +535,6 @@ export function WardrobeProvider({ children }) {
       outfits,
       outfitCollections,
       outfitDraftSessions,
-      feedPosts,
-      homeContent,
       photoBatch,
       loading,
       error,
@@ -568,8 +549,6 @@ export function WardrobeProvider({ children }) {
       dictionaryStyles,
       dictionarySubcategories,
       error,
-      feedPosts,
-      homeContent,
       items,
       loading,
       outfitCollections,

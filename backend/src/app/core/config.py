@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     ml_request_timeout_seconds: int = 300
     backend_internal_url: str = "http://backend:8000"
     internal_service_token: str = "change-me-in-local-dev"
+    weather_api_base_url: str = "https://api.open-meteo.com/v1"
 
     cors_origins: str = "http://localhost:8081,http://localhost:19006"
 
