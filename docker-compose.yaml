@@ -50,6 +50,12 @@ services:
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       DIFFUSERS_OFFLINE: "1"
+      CATALOG_ENABLE_TRYOFFDIFF: "true"
+      CATALOG_TRYOFFDIFF_MODE: multi
+      CATALOG_MODEL_MULTI: tryoffdiffv2_multi.pth
+      CATALOG_ENABLE_IP_ADAPTER: "false"
+      CATALOG_IP_BASE_MODEL: sd15
+      CATALOG_IP_ADAPTER_WEIGHT: ip-adapter_sd15_light.safetensors
       CATALOG_TRYOFFDIFF_DIR: /app/models/tryoffdiff
       CATALOG_VAE_DIR: /app/models/sd-vae-ft-mse
       CATALOG_SD15_DIR: /app/models/sd15

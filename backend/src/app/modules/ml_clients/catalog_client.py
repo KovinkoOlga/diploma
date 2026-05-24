@@ -18,7 +18,20 @@ class CatalogGenerationResult:
 
 
 class CatalogGenerationError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str | None = None,
+        model_used: str | None = None,
+        category: str | None = None,
+        generation_status: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.provider = provider
+        self.model_used = model_used
+        self.category = category
+        self.generation_status = generation_status
 
 
 async def generate_catalog_image(
@@ -49,7 +62,13 @@ async def generate_catalog_image(
     catalog_image_base64 = payload.get("catalog_image")
     if generation_status != "ready" or not catalog_image_base64:
         message = payload.get("error_message") or "Catalog generation failed"
-        raise CatalogGenerationError(message)
+        raise CatalogGenerationError(
+            message,
+            provider=payload.get("provider"),
+            model_used=payload.get("model_used"),
+            category=payload.get("category", category_hint),
+            generation_status=generation_status,
+        )
 
     return CatalogGenerationResult(
         catalog_image=base64.b64decode(catalog_image_base64),

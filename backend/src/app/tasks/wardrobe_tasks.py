@@ -11,7 +11,7 @@ from app.modules.files.service import (
     transparent_cutout_variants,
 )
 from app.modules.ml_clients.vision_client import analyze_item_image
-from app.modules.ml_clients.catalog_client import generate_catalog_image
+from app.modules.ml_clients.catalog_client import CatalogGenerationError, generate_catalog_image
 from app.tasks.celery_app import celery_app, run_async_in_worker
 
 
@@ -174,6 +174,7 @@ async def run_prepare_item_photo(draft_id: str) -> None:
 
 
 async def run_enhance_catalog_photo(draft_id: str) -> None:
+    draft: dict | None = None
     try:
         draft = await _get_draft_row(draft_id)
         if draft is None:
@@ -252,6 +253,32 @@ async def run_enhance_catalog_photo(draft_id: str) -> None:
                     updated_at=datetime.now(timezone.utc),
                 )
             )
+    except CatalogGenerationError as exc:
+        async with engine.begin() as connection:
+            ml_result = None
+            if draft is not None:
+                ml_result = _merge_ml_result(
+                    draft.get("ml_result_json"),
+                    "catalog_pipeline",
+                    {
+                        "provider": exc.provider or "unknown",
+                        "model_used": exc.model_used or "unknown",
+                        "category": exc.category or "unknown",
+                        "generation_status": exc.generation_status or "failed",
+                        "error_message": str(exc),
+                    },
+                )
+            await connection.execute(
+                update(item_drafts)
+                .where(item_drafts.c.id == draft_id)
+                .values(
+                    catalog_processing_status=CATALOG_FAILED_STATUS,
+                    catalog_error_message=str(exc),
+                    ml_result_json=ml_result,
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+        return
     except Exception as exc:
         async with engine.begin() as connection:
             await connection.execute(

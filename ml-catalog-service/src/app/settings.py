@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     catalog_sd15_dir: Path = Path("/app/models/sd15")
     catalog_ip_adapter_dir: Path = Path("/app/models/ip-adapter")
 
+    catalog_enable_tryoffdiff: bool = True
+    catalog_tryoffdiff_mode: str = "multi"
     catalog_device: str = "auto"
     catalog_seed: int = 42
     catalog_output_size: int = 512
@@ -23,10 +25,13 @@ class Settings(BaseSettings):
     catalog_num_inference_steps: int = 20
     catalog_guidance_scale: float = 2.0
     catalog_scheduler_filename: str = "scheduler/scheduler_config_v2.json"
+    catalog_model_multi: str = "tryoffdiffv2_multi.pth"
     catalog_model_upper: str = "tryoffdiffv2_upper.pth"
     catalog_model_lower: str = "tryoffdiffv2_lower.pth"
     catalog_model_dress: str = "tryoffdiffv2_dress.pth"
 
+    catalog_enable_ip_adapter: bool = False
+    catalog_ip_base_model: str = "sd15"
     catalog_ip_adapter_weight: str = "ip-adapter_sd15_light.safetensors"
     catalog_ip_adapter_scale: float = 0.75
     catalog_ip_adapter_strength: float = 0.45

@@ -7,8 +7,13 @@ import torch
 from diffusers import StableDiffusionImg2ImgPipeline
 
 from app.image_utils import prepare_cutout_on_white
-from app.model_paths import ip_adapter_required_files, resolve_ip_adapter_weight_path
+from app.model_paths import (
+    ip_adapter_required_files,
+    resolve_ip_adapter_image_encoder_dir,
+    resolve_ip_adapter_weight_path,
+)
 from app.providers.base import CatalogProvider, GenerationInput, ProviderOutput, RouteDecision
+from app.providers.errors import MissingModelFileError, ProviderDisabledError
 from app.settings import Settings, resolve_device
 
 LOGGER = logging.getLogger(__name__)
@@ -44,8 +49,15 @@ class IPAdapterProductProvider(CatalogProvider):
     def required_files(self) -> dict[str, Path]:
         return ip_adapter_required_files(self.settings)
 
+    def _ensure_path_exists(self, path: Path, *, label: str) -> None:
+        if not path.exists():
+            raise MissingModelFileError(f"Missing IP-Adapter {label}: {path}")
+
     def _resolve_weight_path(self) -> Path:
         return resolve_ip_adapter_weight_path(self.settings)
+
+    def _resolve_image_encoder_dir(self) -> Path:
+        return resolve_ip_adapter_image_encoder_dir(self.settings)
 
     def _apply_memory_optimizations(self, pipeline: StableDiffusionImg2ImgPipeline) -> None:
         if hasattr(pipeline, "enable_attention_slicing"):
@@ -59,6 +71,14 @@ class IPAdapterProductProvider(CatalogProvider):
         if self._pipeline is not None:
             return self._pipeline
 
+        if not self.settings.catalog_enable_ip_adapter:
+            raise ProviderDisabledError("IP-Adapter provider is disabled")
+        if self.settings.catalog_ip_base_model.strip().lower() != "sd15":
+            raise RuntimeError(f"Unsupported IP-Adapter base model: {self.settings.catalog_ip_base_model}")
+
+        for name, path in self.required_files().items():
+            self._ensure_path_exists(path, label=name)
+
         dtype = torch.float16 if self.device == "cuda" else torch.float32
         pipeline = StableDiffusionImg2ImgPipeline.from_pretrained(
             str(self.settings.catalog_sd15_dir),
@@ -69,11 +89,12 @@ class IPAdapterProductProvider(CatalogProvider):
         )
 
         weight_path = self._resolve_weight_path()
+        image_encoder_dir = self._resolve_image_encoder_dir()
         pipeline.load_ip_adapter(
             str(self.settings.catalog_ip_adapter_dir),
             subfolder="models",
             weight_name=weight_path.name,
-            image_encoder_folder="models/image_encoder",
+            image_encoder_folder=str(image_encoder_dir),
             local_files_only=True,
         )
         pipeline.set_ip_adapter_scale(self.settings.catalog_ip_adapter_scale)

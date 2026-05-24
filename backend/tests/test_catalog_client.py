@@ -72,5 +72,11 @@ def test_generate_catalog_image_failed(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs: _DummyClient(payload, *args, **kwargs))
 
-    with pytest.raises(CatalogGenerationError, match="model files are missing"):
+    with pytest.raises(CatalogGenerationError, match="model files are missing") as exc_info:
         asyncio.run(generate_catalog_image(b"o", b"c", b"m"))
+
+    exc = exc_info.value
+    assert exc.provider == "ip_adapter"
+    assert exc.model_used == "product"
+    assert exc.category == "shoes"
+    assert exc.generation_status == "failed"

@@ -18,3 +18,7 @@ class ProviderRouteDebugResponse(BaseModel):
     provider: str
     model_key: str
     prompt_type: str | None
+    provider_enabled: bool
+    provider_status: str
+    tryoffdiff_mode: str | None = None
+    ip_base_model: str | None = None
