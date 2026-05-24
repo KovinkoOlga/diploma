@@ -1481,14 +1481,20 @@ async def get_draft(connection: AsyncConnection, user_id: str, draft_id: str) ->
     return await _serialize_draft(connection, row)
 
 
-async def enhance_draft(connection: AsyncConnection, user_id: str, draft_id: str) -> DraftResponse:
+async def enhance_draft(
+    connection: AsyncConnection,
+    user_id: str,
+    draft_id: str,
+    *,
+    prompt_context_override: dict[str, Any] | None = None,
+) -> DraftResponse:
     row = await _load_draft_row(connection, user_id, draft_id)
     if row["processing_status"] != PRIMARY_READY_STATUS:
         raise ValueError("Draft is not ready for catalog enhancement")
     if not row.get("original_file_id") or not row.get("processed_file_id") or not row.get("mask_file_id"):
         raise ValueError("Draft does not have enough ML artifacts for catalog enhancement")
     catalog_status = row.get("catalog_processing_status") or CATALOG_NOT_REQUESTED_STATUS
-    if catalog_status in {CATALOG_QUEUED_STATUS, CATALOG_PROCESSING_STATUS, CATALOG_READY_STATUS}:
+    if catalog_status in {CATALOG_QUEUED_STATUS, CATALOG_PROCESSING_STATUS}:
         return await _serialize_draft(connection, row)
 
     await connection.execute(
@@ -1504,7 +1510,7 @@ async def enhance_draft(connection: AsyncConnection, user_id: str, draft_id: str
 
     await connection.commit()
     try:
-        await trigger_enhance_catalog_photo_task(draft_id)
+        await trigger_enhance_catalog_photo_task(draft_id, prompt_context_override=prompt_context_override)
     except Exception as exc:
         await connection.execute(
             update(item_drafts)

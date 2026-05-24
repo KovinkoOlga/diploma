@@ -1,298 +1,322 @@
-import base64
-import io
+import logging
 import json
-import sys
-from contextlib import nullcontext
-from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
-import torch
-from diffusers import AutoencoderKL, EulerDiscreteScheduler
 from fastapi import FastAPI, File, Form, UploadFile
-from huggingface_hub import hf_hub_download
-from PIL import Image
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from torchvision.transforms.functional import pil_to_tensor
+
+from app.image_utils import (
+    composite_stub_catalog,
+    encode_png_base64,
+    postprocess_catalog_result,
+    prepare_catalog_input,
+)
+from app.prompt_builder import build_catalog_prompt
+from app.providers.sd_turbo_img2img import SdTurboImage2ImageProvider, resolve_generation_seed
+from app.schemas import CatalogGenerationResponse
+from app.settings import get_settings, resolve_device
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+settings = get_settings()
+provider = SdTurboImage2ImageProvider(settings)
+
+app = FastAPI(title="ML Catalog Service", version="0.2.0")
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-TRYOFFDIFF_ROOT = REPO_ROOT / "temp" / "tryoffdiff"
-if TRYOFFDIFF_ROOT.exists():
-    sys.path.insert(0, str(TRYOFFDIFF_ROOT))
+def _parse_color_ids(color_ids_json: str | None, repeated_color_ids: list[str] | None) -> list[str]:
+    raw_values: list[str] = []
 
-from tryoffdiff.modeling.model import create_model
+    for value in repeated_color_ids or []:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            raw_values.append(text)
 
+    raw_text = str(color_ids_json or "").strip()
+    if raw_text:
+        try:
+            parsed = json.loads(raw_text)
+        except json.JSONDecodeError:
+            parsed = None
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+        if isinstance(parsed, list):
+            raw_values.extend(str(item).strip() for item in parsed if str(item).strip())
+        elif isinstance(parsed, str):
+            raw_values.extend(part.strip() for part in parsed.split(",") if part.strip())
+        else:
+            if "," in raw_text:
+                raw_values.extend(part.strip() for part in raw_text.split(",") if part.strip())
+            elif raw_text.replace("-", "_").replace("_", "").isalnum():
+                raw_values.append(raw_text.strip())
 
-    hf_repo_id: str = "rizavelioglu/tryoffdiff"
-    catalog_device: str = "auto"
-    catalog_enable_stub: bool = False
-    catalog_force_primary_failure: bool = False
-    catalog_num_inference_steps: int = 20
-    catalog_guidance_scale: float = 2.0
-    catalog_seed: int = 42
-    catalog_scheduler_filename: str = "scheduler/scheduler_config_v2.json"
-    catalog_model_upper: str = "tryoffdiffv2_upper.pth"
-    catalog_model_lower: str = "tryoffdiffv2_lower.pth"
-    catalog_model_dress: str = "tryoffdiffv2_dress.pth"
-
-
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
-
-
-def _to_rgba(content: bytes) -> Image.Image:
-    return Image.open(io.BytesIO(content)).convert("RGBA")
-
-
-def _to_mask(content: bytes) -> Image.Image:
-    return Image.open(io.BytesIO(content)).convert("L")
-
-
-def _encode_png(image: Image.Image) -> bytes:
-    buffer = io.BytesIO()
-    image.save(buffer, format="PNG")
-    return buffer.getvalue()
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in raw_values:
+        for chunk in str(value).split(","):
+            candidate = chunk.strip().lower().replace("-", "_")
+            if not candidate or candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+    return normalized
 
 
-def _paste_center(canvas: Image.Image, image: Image.Image) -> Image.Image:
-    offset = ((canvas.width - image.width) // 2, (canvas.height - image.height) // 2)
-    canvas.paste(image, offset)
-    return canvas
-
-
-def _square_resize(image: Image.Image, size: int = 512) -> Image.Image:
-    side = max(image.width, image.height)
-    square = Image.new("RGB", (side, side), color=(255, 255, 255))
-    _paste_center(square, image.convert("RGB"))
-    return square.resize((size, size), Image.Resampling.LANCZOS)
-
-
-def _composite_catalog(cutout_bytes: bytes) -> bytes:
-    cutout = _to_rgba(cutout_bytes)
-    background = Image.new("RGBA", cutout.size, color=(255, 255, 255, 255))
-    background.alpha_composite(cutout)
-    return _encode_png(background)
-
-
-def _prepare_condition_image(original_bytes: bytes, cutout_bytes: bytes, mask_bytes: bytes) -> Image.Image:
-    original = _to_rgba(original_bytes)
-    cutout = _to_rgba(cutout_bytes)
-    mask = _to_mask(mask_bytes)
-
-    if cutout.size != original.size:
-        cutout = cutout.resize(original.size, Image.Resampling.LANCZOS)
-    if mask.size != original.size:
-        mask = mask.resize(original.size, Image.Resampling.NEAREST)
-
-    bbox = mask.getbbox() or cutout.getbbox() or original.getbbox() or (0, 0, original.width, original.height)
-    original_crop = original.crop(bbox)
-    cutout_crop = cutout.crop(bbox)
-    mask_crop = mask.crop(bbox)
-
-    if cutout_crop.getchannel("A").getbbox() is None:
-        transparent = Image.new("RGBA", original_crop.size, (0, 0, 0, 0))
-        foreground = Image.composite(original_crop, transparent, mask_crop)
-    else:
-        foreground = cutout_crop
-
-    background = Image.new("RGBA", foreground.size, color=(255, 255, 255, 255))
-    background.alpha_composite(foreground)
-    return _square_resize(background.convert("RGB"))
-
-
-def _resolve_device(device_name: str) -> str:
-    if device_name == "auto":
-        return "cuda" if torch.cuda.is_available() else "cpu"
-    if device_name == "cuda" and not torch.cuda.is_available():
-        return "cpu"
-    return device_name
-
-
-def _category_to_model_key(category_hint: str | None) -> str | None:
-    if not category_hint:
-        return None
-    normalized = category_hint.strip().lower()
-    if normalized in {"tops", "outerwear"}:
-        return "upper"
-    if normalized in {"bottoms"}:
-        return "lower"
-    if normalized in {"dresses"}:
-        return "dress"
-    return None
-
-
-class TryOffDiffRuntime:
-    MODEL_CONFIGS = {
-        "upper": ("TryOffDiffv2Single", "catalog_model_upper"),
-        "lower": ("TryOffDiffv2Single", "catalog_model_lower"),
-        "dress": ("TryOffDiffv2Single", "catalog_model_dress"),
+def _default_prompt_tokenization_debug() -> dict[str, Any]:
+    return {
+        "prompt_token_count": None,
+        "prompt_token_limit": 77,
+        "prompt_truncated": None,
     }
-
-    def __init__(self) -> None:
-        self.settings = get_settings()
-        self.device = _resolve_device(self.settings.catalog_device)
-        self._scheduler_config: dict | None = None
-        self._vae: AutoencoderKL | None = None
-        self._models: dict[str, torch.nn.Module] = {}
-
-        torch.set_float32_matmul_precision("high")
-        if torch.cuda.is_available():
-            torch.backends.cuda.matmul.allow_tf32 = True
-
-    def _ensure_shared_models(self) -> None:
-        if self._vae is None:
-            self._vae = AutoencoderKL.from_pretrained("stabilityai/sd-vae-ft-mse").eval().to(self.device)
-            self._vae.requires_grad_(False)
-        if self._scheduler_config is None:
-            scheduler_path = hf_hub_download(
-                repo_id=self.settings.hf_repo_id,
-                filename=self.settings.catalog_scheduler_filename,
-            )
-            with open(scheduler_path, encoding="utf-8") as fh:
-                self._scheduler_config = json.load(fh)
-
-    def _build_scheduler(self) -> EulerDiscreteScheduler:
-        assert self._scheduler_config is not None
-        scheduler = EulerDiscreteScheduler.from_config(self._scheduler_config, use_karras_sigmas=True)
-        scheduler.is_scale_input_called = True
-        return scheduler
-
-    def _load_model(self, model_key: str) -> torch.nn.Module:
-        if model_key in self._models:
-            return self._models[model_key]
-
-        model_class_name, settings_attr = self.MODEL_CONFIGS[model_key]
-        checkpoint_name = getattr(self.settings, settings_attr)
-        checkpoint_path = hf_hub_download(repo_id=self.settings.hf_repo_id, filename=checkpoint_name)
-        state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-        state_dict = {key.replace("_orig_mod.", ""): value for key, value in state_dict.items()}
-
-        model = create_model(model_class_name)
-        model.load_state_dict(state_dict, strict=True)
-        model = model.eval().to(self.device)
-        model.requires_grad_(False)
-        self._models[model_key] = model
-        return model
-
-    def _autocast(self):
-        if self.device == "cuda":
-            return torch.autocast(device_type="cuda", dtype=torch.float16)
-        return nullcontext()
-
-    def _condition_tensor(self, image: Image.Image) -> torch.Tensor:
-        image_tensor = pil_to_tensor(image).to(dtype=torch.float32) / 255.0
-        image_tensor = (image_tensor - 0.5) / 0.5
-        return image_tensor.unsqueeze(0).to(self.device)
-
-    @torch.no_grad()
-    def generate(self, original_bytes: bytes, cutout_bytes: bytes, mask_bytes: bytes, category_hint: str | None) -> tuple[bytes, str]:
-        model_key = _category_to_model_key(category_hint)
-        if model_key is None:
-            raise ValueError(f"Unsupported category for TryOffDiff: {category_hint or 'unknown'}")
-
-        self._ensure_shared_models()
-        model = self._load_model(model_key)
-        scheduler = self._build_scheduler()
-        scheduler.set_timesteps(self.settings.catalog_num_inference_steps)
-
-        condition_image = _prepare_condition_image(original_bytes, cutout_bytes, mask_bytes)
-        cond_tensor = self._condition_tensor(condition_image)
-        guidance_scale = self.settings.catalog_guidance_scale
-        generator = torch.Generator(device=self.device).manual_seed(self.settings.catalog_seed)
-        latents = torch.randn(1, 4, 64, 64, generator=generator, device=self.device)
-        uncond_tensor = torch.zeros_like(cond_tensor) if guidance_scale > 1 else None
-
-        with self._autocast():
-            for timestep in scheduler.timesteps:
-                timestep = timestep.to(self.device)
-                if guidance_scale > 1:
-                    noise_pred = model(torch.cat([latents] * 2), timestep, torch.cat([uncond_tensor, cond_tensor])).chunk(2)
-                    noise_pred = noise_pred[0] + guidance_scale * (noise_pred[1] - noise_pred[0])
-                else:
-                    noise_pred = model(latents, timestep, cond_tensor)
-                scheduler_output = scheduler.step(noise_pred, timestep, latents)
-                latents = scheduler_output.prev_sample
-
-            assert self._vae is not None
-            decoded = self._vae.decode(1 / self._vae.config.scaling_factor * scheduler_output.pred_original_sample).sample
-
-        image_tensor = ((decoded / 2) + 0.5).clamp(0, 1).cpu()[0]
-        image_array = (image_tensor.permute(1, 2, 0).numpy() * 255).round().astype("uint8")
-        image = Image.fromarray(image_array, mode="RGB")
-        return _encode_png(image), f"tryoffdiffv2-{model_key}"
-
-
-class TryOffDiffGenerator:
-    def __init__(self) -> None:
-        self.runtime = TryOffDiffRuntime()
-
-    def generate(
-        self,
-        original_bytes: bytes,
-        cutout_bytes: bytes,
-        mask_bytes: bytes,
-        *,
-        category_hint: str | None = None,
-    ) -> tuple[bytes, str]:
-        settings = get_settings()
-        if settings.catalog_force_primary_failure:
-            raise RuntimeError("Forced TryOffDiff failure")
-        if settings.catalog_enable_stub:
-            return _composite_catalog(cutout_bytes), "tryoffdiff-stub"
-        return self.runtime.generate(original_bytes, cutout_bytes, mask_bytes, category_hint)
-
-
-class CompositeFallbackGenerator:
-    def generate(self, original_bytes: bytes, cutout_bytes: bytes, mask_bytes: bytes) -> tuple[bytes, str]:
-        return _composite_catalog(cutout_bytes), "catalog-composite-fallback"
-
-
-primary_generator = TryOffDiffGenerator()
-fallback_generator = CompositeFallbackGenerator()
-app = FastAPI(title="ML Catalog Service", version="0.1.0")
 
 
 @app.get("/health")
-async def health() -> dict:
-    settings = get_settings()
+async def health() -> dict[str, Any]:
+    model_path = Path(settings.catalog_model_id)
     return {
         "status": "ok",
-        "device": _resolve_device(settings.catalog_device),
+        "provider": settings.catalog_provider,
+        "model_id": settings.catalog_model_id,
+        "model_variant": settings.catalog_model_variant,
+        "local_files_only": settings.catalog_local_files_only,
+        "device": resolve_device(settings.catalog_device),
+        "output_size": settings.catalog_output_size,
+        "steps": settings.catalog_num_inference_steps,
+        "strength": settings.catalog_strength,
+        "guidance_scale": settings.catalog_guidance_scale,
+        "seed": settings.catalog_seed,
+        "deterministic": settings.catalog_deterministic,
+        "transparent_background": settings.catalog_transparent_background,
+        "background_threshold": settings.catalog_background_threshold,
+        "background_feather": settings.catalog_background_feather,
+        "result_margin_ratio": settings.catalog_result_margin_ratio,
+        "post_sharpen_enabled": settings.catalog_post_sharpen_enabled,
+        "post_sharpen_radius": settings.catalog_post_sharpen_radius,
+        "post_sharpen_percent": settings.catalog_post_sharpen_percent,
+        "post_sharpen_threshold": settings.catalog_post_sharpen_threshold,
         "stub_enabled": settings.catalog_enable_stub,
-        "tryoffdiff_root_exists": TRYOFFDIFF_ROOT.exists(),
+        "force_failure": settings.catalog_force_failure,
+        "model_path_exists": model_path.exists(),
+        "model_index_exists": (model_path / "model_index.json").exists(),
+        "cpu_only": True,
     }
 
 
-@app.post("/v1/generate-catalog")
+@app.post("/v1/generate-catalog", response_model=CatalogGenerationResponse)
 async def generate_catalog(
     original_image: UploadFile = File(...),
     cutout_image: UploadFile = File(...),
     mask_image: UploadFile = File(...),
     category_hint: str | None = Form(None),
-) -> dict:
+    subcategory_id: str | None = Form(None),
+    subcategory_name: str | None = Form(None),
+    color_ids_json: str | None = Form(None),
+    color_ids: list[str] | None = Form(None),
+) -> CatalogGenerationResponse:
     original_bytes = await original_image.read()
     cutout_bytes = await cutout_image.read()
     mask_bytes = await mask_image.read()
+    category = category_hint or "unknown"
+    parsed_color_ids = _parse_color_ids(color_ids_json, color_ids)
+    prompt, prompt_metadata = build_catalog_prompt(
+        category_hint=category_hint,
+        subcategory_id=subcategory_id,
+        subcategory_name=subcategory_name,
+        color_ids=parsed_color_ids,
+    )
 
-    fallback_used = False
-    try:
-        result_bytes, model_used = primary_generator.generate(
+    if settings.catalog_force_failure:
+        seed, deterministic = resolve_generation_seed(settings)
+        return CatalogGenerationResponse(
+            catalog_image=None,
+            mime_type=None,
+            provider=settings.catalog_provider,
+            model_used=settings.catalog_model_id,
+            category=category,
+            subcategory_id=subcategory_id,
+            subcategory_name=subcategory_name,
+            subcategory_prompt_text=prompt_metadata.get("subcategory_prompt_text"),
+            color_ids=prompt_metadata.get("color_ids") or [],
+            color_prompt_text=prompt_metadata.get("color_prompt_text"),
+            deterministic=deterministic,
+            seed=seed,
+            generation_status="failed",
+            error_message="Forced catalog generation failure",
+            fallback_used=False,
+            debug={
+                "prompt_version": settings.catalog_prompt_version,
+                "prompt": prompt,
+                "prompt_metadata": prompt_metadata,
+                "compact_prompt_used": bool(prompt_metadata.get("compact_prompt_used")),
+                "model_variant": settings.catalog_model_variant,
+                "local_files_only": settings.catalog_local_files_only,
+                "transparent_background": settings.catalog_transparent_background,
+                "background_threshold": settings.catalog_background_threshold,
+                "background_feather": settings.catalog_background_feather,
+                "result_margin_ratio": settings.catalog_result_margin_ratio,
+                "post_sharpen_enabled": settings.catalog_post_sharpen_enabled,
+                "post_sharpen_radius": settings.catalog_post_sharpen_radius,
+                "post_sharpen_percent": settings.catalog_post_sharpen_percent,
+                "post_sharpen_threshold": settings.catalog_post_sharpen_threshold,
+                "deterministic": deterministic,
+                "seed": seed,
+                "cpu_only": True,
+                **_default_prompt_tokenization_debug(),
+            },
+        )
+
+    if settings.catalog_enable_stub:
+        seed, deterministic = resolve_generation_seed(settings)
+        image = composite_stub_catalog(
             original_bytes,
             cutout_bytes,
             mask_bytes,
-            category_hint=category_hint,
+            output_size=settings.catalog_output_size,
         )
-    except Exception:
-        result_bytes, model_used = fallback_generator.generate(original_bytes, cutout_bytes, mask_bytes)
-        fallback_used = True
+        postprocessed, postprocess_debug = postprocess_catalog_result(
+            image,
+            output_size=settings.catalog_output_size,
+            margin_ratio=settings.catalog_result_margin_ratio,
+            transparent_background=settings.catalog_transparent_background,
+            threshold=settings.catalog_background_threshold,
+            feather=settings.catalog_background_feather,
+            post_sharpen_enabled=settings.catalog_post_sharpen_enabled,
+            post_sharpen_radius=settings.catalog_post_sharpen_radius,
+            post_sharpen_percent=settings.catalog_post_sharpen_percent,
+            post_sharpen_threshold=settings.catalog_post_sharpen_threshold,
+        )
+        return CatalogGenerationResponse(
+            catalog_image=encode_png_base64(postprocessed),
+            mime_type="image/png",
+            provider="stub",
+            model_used="catalog-composite-stub",
+            category=category,
+            subcategory_id=subcategory_id,
+            subcategory_name=subcategory_name,
+            subcategory_prompt_text=prompt_metadata.get("subcategory_prompt_text"),
+            color_ids=prompt_metadata.get("color_ids") or [],
+            color_prompt_text=prompt_metadata.get("color_prompt_text"),
+            deterministic=deterministic,
+            seed=seed,
+            generation_status="ready",
+            fallback_used=True,
+            debug={
+                "prompt_version": settings.catalog_prompt_version,
+                "prompt": prompt,
+                "prompt_metadata": prompt_metadata,
+                "compact_prompt_used": bool(prompt_metadata.get("compact_prompt_used")),
+                "output_size": settings.catalog_output_size,
+                "transparent_background": settings.catalog_transparent_background,
+                "background_threshold": settings.catalog_background_threshold,
+                "background_feather": settings.catalog_background_feather,
+                "result_margin_ratio": settings.catalog_result_margin_ratio,
+                "post_sharpen_enabled": settings.catalog_post_sharpen_enabled,
+                "post_sharpen_radius": settings.catalog_post_sharpen_radius,
+                "post_sharpen_percent": settings.catalog_post_sharpen_percent,
+                "post_sharpen_threshold": settings.catalog_post_sharpen_threshold,
+                "deterministic": deterministic,
+                "seed": seed,
+                "postprocess": postprocess_debug,
+                "cpu_only": True,
+                **_default_prompt_tokenization_debug(),
+            },
+        )
 
-    return {
-        "catalog_image": base64.b64encode(result_bytes).decode("utf-8"),
-        "mime_type": "image/png",
-        "model_used": model_used,
-        "fallback_used": fallback_used,
-    }
+    try:
+        input_image = prepare_catalog_input(
+            original_bytes,
+            cutout_bytes,
+            mask_bytes,
+            output_size=settings.catalog_output_size,
+        )
+        output = provider.generate(input_image, prompt)
+        postprocessed, postprocess_debug = postprocess_catalog_result(
+            output.image,
+            output_size=settings.catalog_output_size,
+            margin_ratio=settings.catalog_result_margin_ratio,
+            transparent_background=settings.catalog_transparent_background,
+            threshold=settings.catalog_background_threshold,
+            feather=settings.catalog_background_feather,
+            post_sharpen_enabled=settings.catalog_post_sharpen_enabled,
+            post_sharpen_radius=settings.catalog_post_sharpen_radius,
+            post_sharpen_percent=settings.catalog_post_sharpen_percent,
+            post_sharpen_threshold=settings.catalog_post_sharpen_threshold,
+        )
+
+        debug = dict(output.debug)
+        debug["prompt_version"] = settings.catalog_prompt_version
+        debug["prompt"] = prompt
+        debug["prompt_metadata"] = prompt_metadata
+        debug["compact_prompt_used"] = bool(prompt_metadata.get("compact_prompt_used"))
+        debug["transparent_background"] = settings.catalog_transparent_background
+        debug["background_threshold"] = settings.catalog_background_threshold
+        debug["background_feather"] = settings.catalog_background_feather
+        debug["result_margin_ratio"] = settings.catalog_result_margin_ratio
+        debug["post_sharpen_enabled"] = settings.catalog_post_sharpen_enabled
+        debug["post_sharpen_radius"] = settings.catalog_post_sharpen_radius
+        debug["post_sharpen_percent"] = settings.catalog_post_sharpen_percent
+        debug["post_sharpen_threshold"] = settings.catalog_post_sharpen_threshold
+        debug["postprocess"] = postprocess_debug
+
+        response_seed = output.debug.get("seed") if isinstance(output.debug, dict) else None
+        response_deterministic = output.debug.get("deterministic") if isinstance(output.debug, dict) else None
+
+        return CatalogGenerationResponse(
+            catalog_image=encode_png_base64(postprocessed),
+            mime_type="image/png",
+            provider=output.provider,
+            model_used=output.model_used,
+            category=category,
+            subcategory_id=subcategory_id,
+            subcategory_name=subcategory_name,
+            subcategory_prompt_text=prompt_metadata.get("subcategory_prompt_text"),
+            color_ids=prompt_metadata.get("color_ids") or [],
+            color_prompt_text=prompt_metadata.get("color_prompt_text"),
+            deterministic=bool(response_deterministic) if response_deterministic is not None else None,
+            seed=int(response_seed) if response_seed is not None else None,
+            generation_status="ready",
+            fallback_used=False,
+            debug=debug,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Catalog generation failed")
+        seed, deterministic = resolve_generation_seed(settings)
+        return CatalogGenerationResponse(
+            catalog_image=None,
+            mime_type=None,
+            provider=settings.catalog_provider,
+            model_used=settings.catalog_model_id,
+            category=category,
+            subcategory_id=subcategory_id,
+            subcategory_name=subcategory_name,
+            subcategory_prompt_text=prompt_metadata.get("subcategory_prompt_text"),
+            color_ids=prompt_metadata.get("color_ids") or [],
+            color_prompt_text=prompt_metadata.get("color_prompt_text"),
+            deterministic=deterministic,
+            seed=seed,
+            generation_status="failed",
+            error_message=str(exc),
+            fallback_used=False,
+            debug={
+                "prompt_version": settings.catalog_prompt_version,
+                "prompt": prompt,
+                "prompt_metadata": prompt_metadata,
+                "compact_prompt_used": bool(prompt_metadata.get("compact_prompt_used")),
+                "model_variant": settings.catalog_model_variant,
+                "local_files_only": settings.catalog_local_files_only,
+                "transparent_background": settings.catalog_transparent_background,
+                "background_threshold": settings.catalog_background_threshold,
+                "background_feather": settings.catalog_background_feather,
+                "result_margin_ratio": settings.catalog_result_margin_ratio,
+                "post_sharpen_enabled": settings.catalog_post_sharpen_enabled,
+                "post_sharpen_radius": settings.catalog_post_sharpen_radius,
+                "post_sharpen_percent": settings.catalog_post_sharpen_percent,
+                "post_sharpen_threshold": settings.catalog_post_sharpen_threshold,
+                "deterministic": deterministic,
+                "seed": seed,
+                "cpu_only": True,
+                **_default_prompt_tokenization_debug(),
+            },
+        )

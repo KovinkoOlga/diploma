@@ -368,8 +368,8 @@ export function WardrobeProvider({ children }) {
       async fetchDraft(draftId) {
         return wardrobeApi.fetchDraft(draftId);
       },
-      async enhanceDraft(draftId) {
-        return wardrobeApi.enhanceDraft(draftId);
+      async enhanceDraft(draftId, promptContext) {
+        return wardrobeApi.enhanceDraft(draftId, promptContext);
       },
       async editDraftMask(draftId, payload) {
         return wardrobeApi.editDraftMask(draftId, payload);

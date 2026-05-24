@@ -47,19 +47,37 @@ services:
     ports:
       - "8001:8001"
 
-  # ml-catalog-service:
-  #   build:
-  #     context: ./ml-catalog-service
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     CATALOG_DEVICE: auto
-  #     CATALOG_ENABLE_STUB: "false"
-  #     HF_HOME: /app/.cache/huggingface
-  #   ports:
-  #     - "8002:8002"
-  #   volumes:
-  #     - hf_cache:/app/.cache/huggingface
+  ml-catalog-service:
+    build:
+      context: ./ml-catalog-service
+    env_file:
+      - .env
+    environment:
+      CATALOG_PROVIDER: sd_turbo_img2img
+      CATALOG_MODEL_ID: /app/models/sd-turbo-fp16
+      CATALOG_MODEL_VARIANT: fp16
+      CATALOG_LOCAL_FILES_ONLY: "true"
+      CATALOG_DEVICE: cpu
+      CATALOG_OUTPUT_SIZE: "512"
+      CATALOG_NUM_INFERENCE_STEPS: "5"
+      CATALOG_STRENGTH: "0.5"
+      CATALOG_GUIDANCE_SCALE: "0.0"
+      CATALOG_DETERMINISTIC: "false"
+      CATALOG_PROMPT_VERSION: catalog_prompt_v1
+      CATALOG_TRANSPARENT_BACKGROUND: "true"
+      CATALOG_BACKGROUND_THRESHOLD: "30"
+      CATALOG_BACKGROUND_FEATHER: "20"
+      CATALOG_RESULT_MARGIN_RATIO: "0.06"
+      CATALOG_POST_SHARPEN_ENABLED: "true"
+      CATALOG_POST_SHARPEN_RADIUS: "0.6"
+      CATALOG_POST_SHARPEN_PERCENT: "80"
+      CATALOG_POST_SHARPEN_THRESHOLD: "3"
+      CATALOG_ENABLE_STUB: "false"
+      HF_HOME: /app/.cache/huggingface
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./ml-catalog-service/models/sd-turbo-fp16:/app/models/sd-turbo-fp16:ro
 
   backend:
     build:
@@ -82,8 +100,8 @@ services:
         condition: service_started
       ml-vision-service:
         condition: service_started
-      # ml-catalog-service:
-      #   condition: service_started
+      ml-catalog-service:
+        condition: service_started
 
   celery-worker:
     build:
@@ -112,8 +130,8 @@ services:
         condition: service_started
       ml-vision-service:
         condition: service_started
-      # ml-catalog-service:
-      #   condition: service_started
+      ml-catalog-service:
+        condition: service_started
 
   # pgadmin:
   #   container_name: pgadmin
@@ -128,4 +146,3 @@ services:
 
 volumes:
   postgres_data:
-  hf_cache:

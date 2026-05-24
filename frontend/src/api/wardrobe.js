@@ -123,8 +123,8 @@ export async function fetchDraft(draftId) {
   return draft;
 }
 
-export async function enhanceDraft(draftId) {
-  const draft = await apiPost(`/wardrobe/drafts/${draftId}/enhance`);
+export async function enhanceDraft(draftId, promptContext) {
+  const draft = await apiPost(`/wardrobe/drafts/${draftId}/enhance`, promptContext ?? {});
   if (draft?.draft) {
     draft.draft = normalizeRemoteImage(draft.draft);
   }

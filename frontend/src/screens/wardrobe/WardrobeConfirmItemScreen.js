@@ -66,6 +66,32 @@ function preserveEditedDraftFields(currentDraft, previousServerDraft, nextServer
   return mergedDraft;
 }
 
+function normalizePromptColorIds(colorIds) {
+  if (!Array.isArray(colorIds)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const entry of colorIds) {
+    const value = String(entry ?? "").trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
+}
+
+function buildEnhancePromptPayload(draft) {
+  const subcategory = typeof draft?.subcategory === "string" ? draft.subcategory : null;
+  const subcategoryId = typeof draft?.subcategoryId === "string" ? draft.subcategoryId : null;
+
+  return {
+    categoryId: draft?.categoryId ?? null,
+    subcategory: subcategory ?? null,
+    subcategoryName: subcategory ?? null,
+    subcategoryId: subcategoryId,
+    colorIds: normalizePromptColorIds(draft?.colorIds),
+  };
+}
+
 export default function WardrobeConfirmItemScreen({ navigation, route }) {
   const { spacing, colors, typography, radius } = useAppTheme();
   const { catalogs, categories, colorOptions, seasonOptions, styleOptions, statusOptions, items, photoBatch, actions } =
@@ -459,7 +485,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
                   let keepPolling = false;
                   setEnhancing(true);
                   try {
-                    const next = await actions.enhanceDraft(draftId);
+                    const next = await actions.enhanceDraft(draftId, buildEnhancePromptPayload(draft));
                     syncDraftState(next);
                     if (next.catalogProcessingStatus === "queued" || next.catalogProcessingStatus === "processing") {
                       keepPolling = true;

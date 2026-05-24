@@ -12,9 +12,13 @@ dependencies = [
   "python-multipart>=0.0.9",
   "safetensors>=0.5.0",
   "torch>=2.7.1",
-  "torchvision>=0.22.1",
   "transformers>=4.53.1",
   "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
 ]
 
 [build-system]
@@ -23,3 +27,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

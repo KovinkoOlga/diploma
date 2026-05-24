@@ -56,3 +56,7 @@ __pycache__/
 # ML
 *.keras
 ml-vision-service/models/*.h5
+models/
+ml-catalog-service/models/
+ml-catalog-service/.cache/
+ml-catalog-service/.pytest_cache/

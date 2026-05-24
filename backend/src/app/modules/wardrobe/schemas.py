@@ -193,6 +193,14 @@ class DraftResponse(BaseModel):
     mlResult: dict[str, Any] | None = None
 
 
+class EnhanceDraftPayload(BaseModel):
+    categoryId: str | None = None
+    subcategoryId: str | None = None
+    subcategory: str | None = None
+    subcategoryName: str | None = None
+    colorIds: list[str] | str | None = None
+
+
 class InternalDraftProgressPayload(BaseModel):
     status: Literal[
         "preparing",

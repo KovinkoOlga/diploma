@@ -19,6 +19,7 @@ from app.modules.wardrobe.schemas import (
     DictionaryStyleResponse,
     DictionarySubcategoryResponse,
     DraftCreatePayload,
+    EnhanceDraftPayload,
     DraftResponse,
     ItemPatch,
     ItemPayload,
@@ -414,11 +415,17 @@ async def get_draft(
 @router.post("/drafts/{draft_id}/enhance", response_model=DraftResponse)
 async def enhance_draft(
     draft_id: str,
+    payload: EnhanceDraftPayload | None = None,
     current_user: dict = Depends(get_current_user),
     connection: AsyncConnection = Depends(get_connection),
 ) -> DraftResponse:
     try:
-        return await service.enhance_draft(connection, _user_id(current_user), draft_id)
+        return await service.enhance_draft(
+            connection,
+            _user_id(current_user),
+            draft_id,
+            prompt_context_override=payload.model_dump(exclude_none=True) if payload else None,
+        )
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
     except ValueError as exc:
