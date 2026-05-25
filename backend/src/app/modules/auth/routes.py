@@ -32,6 +32,14 @@ from app.modules.wardrobe.seed import ensure_default_catalogs
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _datetime_to_iso(value: datetime | str | None) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if value is None:
+        return ""
+    return str(value)
+
+
 async def user_response(connection: AsyncConnection, user: dict) -> UserResponse:
     avatar_url = await get_file_url(connection, user.get("avatar_file_id"), "thumbnail")
     return UserResponse(
@@ -40,6 +48,7 @@ async def user_response(connection: AsyncConnection, user: dict) -> UserResponse
         displayName=user.get("display_name") or "",
         avatarFileId=user.get("avatar_file_id"),
         avatarUrl=avatar_url,
+        createdAt=_datetime_to_iso(user.get("created_at")),
     )
 
 
@@ -79,6 +88,7 @@ async def _find_refresh_session(connection: AsyncConnection, refresh_token: str)
                 users.c.email,
                 users.c.display_name,
                 users.c.avatar_file_id,
+                users.c.created_at,
             )
             .select_from(refresh_sessions.join(users, refresh_sessions.c.user_id == users.c.id))
             .where(refresh_sessions.c.refresh_token_hash == hash_refresh_token(refresh_token))
@@ -111,7 +121,8 @@ async def register(
     except IntegrityError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     await ensure_default_catalogs(connection, user["id"])
-    return await issue_token_pair(connection, user, user_agent, x_device_name)
+    row = (await connection.execute(select(users).where(users.c.id == user["id"]))).mappings().one()
+    return await issue_token_pair(connection, dict(row), user_agent, x_device_name)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -140,6 +151,7 @@ async def refresh(
         "email": session["email"],
         "display_name": session["display_name"],
         "avatar_file_id": session["avatar_file_id"],
+        "created_at": session["created_at"],
     }
     token_pair = await issue_token_pair(connection, user, user_agent, x_device_name)
     new_session = (

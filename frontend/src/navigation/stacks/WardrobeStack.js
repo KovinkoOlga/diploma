@@ -18,6 +18,8 @@ import WardrobeManageCatalogsScreen from "../../screens/wardrobe/WardrobeManageC
 import WardrobeManageCategoriesScreen from "../../screens/wardrobe/WardrobeManageCategoriesScreen";
 import WardrobeArchiveScreen from "../../screens/wardrobe/WardrobeArchiveScreen";
 import WardrobeItemSelectScreen from "../../screens/wardrobe/WardrobeItemSelectScreen";
+import WardrobeUnusedItemsScreen from "../../screens/wardrobe/WardrobeUnusedItemsScreen";
+import WardrobeDataQualityItemsScreen from "../../screens/wardrobe/WardrobeDataQualityItemsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -70,7 +72,9 @@ export default function WardrobeStack() {
       <Stack.Screen name={Routes.WardrobeManageCatalogs} component={WardrobeManageCatalogsScreen} options={{ title: "Справочники" }} />
       <Stack.Screen name={Routes.WardrobeManageCategories} component={WardrobeManageCategoriesScreen} options={{ title: "Категории" }} />
       <Stack.Screen name={Routes.WardrobeArchive} component={WardrobeArchiveScreen} options={{ title: "Архив" }} />
+      <Stack.Screen name={Routes.WardrobeUnusedItems} component={WardrobeUnusedItemsScreen} options={{ title: "Давно не носили" }} />
       <Stack.Screen name={Routes.WardrobeItemSelect} component={WardrobeItemSelectScreen} options={{ title: "Выбор вещей" }} />
+      <Stack.Screen name={Routes.WardrobeDataQualityItems} component={WardrobeDataQualityItemsScreen} options={{ title: "Качество данных" }} />
     </Stack.Navigator>
   );
 }

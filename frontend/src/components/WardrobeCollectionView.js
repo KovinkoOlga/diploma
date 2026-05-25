@@ -39,6 +39,7 @@ export default function WardrobeCollectionView({
   emptyStateSubtitle,
   fixedFilters = {},
   initialSelectionMode = false,
+  allowSelection = true,
   allowCatalogFilter = true,
   allowCategoryFilter = true,
   showFab = true,
@@ -168,10 +169,12 @@ export default function WardrobeCollectionView({
               {subtitle ?? `${mergedItems.length} вещей`}
             </Text>
           </View>
-          {!selectionMode ? <ActionButton label="Выбрать" variant="ghost" compact onPress={() => setSelectionMode(true)} /> : null}
+          {allowSelection && !selectionMode ? (
+            <ActionButton label="Выбрать" variant="ghost" compact onPress={() => setSelectionMode(true)} />
+          ) : null}
         </View>
 
-        {selectionMode ? (
+        {allowSelection && selectionMode ? (
           <View
             style={{
               marginTop: spacing.sm,
@@ -225,7 +228,7 @@ export default function WardrobeCollectionView({
                   ? toggleSelect(item.id)
                   : navigation.navigate(Routes.ItemDetails, { itemId: item.id })
               }
-              onLongPress={() => enterSelectionMode(item.id)}
+              onLongPress={allowSelection ? () => enterSelectionMode(item.id) : undefined}
             />
           </View>
         )}

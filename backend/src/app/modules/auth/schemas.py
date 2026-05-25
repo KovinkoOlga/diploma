@@ -12,6 +12,7 @@ class UserResponse(BaseModel):
     displayName: str
     avatarFileId: str | None = None
     avatarUrl: str | None = None
+    createdAt: str = ""
 
 
 class TokenResponse(BaseModel):
