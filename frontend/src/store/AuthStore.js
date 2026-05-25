@@ -96,6 +96,12 @@ export function AuthProvider({ children }) {
     return user;
   }, []);
 
+  const uploadAvatar = useCallback(async (fileAsset) => {
+    const user = await authApi.uploadAvatar(fileAsset);
+    setCurrentUser(user);
+    return user;
+  }, []);
+
   const value = useMemo(
     () => ({
       currentUser,
@@ -107,9 +113,10 @@ export function AuthProvider({ children }) {
       register,
       logout,
       updateProfile,
+      uploadAvatar,
       clearSession,
     }),
-    [authError, bootstrapping, clearSession, currentUser, login, logout, register, updateProfile]
+    [authError, bootstrapping, clearSession, currentUser, login, logout, register, updateProfile, uploadAvatar]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -122,4 +129,3 @@ export function useAuth() {
   }
   return context;
 }
-

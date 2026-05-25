@@ -8,7 +8,7 @@ import AuthScreen from "./screens/auth/AuthScreen";
 import { AuthProvider, useAuth } from "./store/AuthStore";
 import { WardrobeProvider } from "./store/WardrobeStore";
 import RootNavigator from "./navigation/RootNavigator";
-import { ensureWeeklyCalendarReminder, registerNotificationResponseHandler } from "./services/notifications";
+import { registerNotificationResponseHandler, syncWeeklyCalendarReminder } from "./services/notifications";
 
 enableScreens();
 
@@ -18,9 +18,11 @@ function InnerApp() {
   const barStyle = useMemo(() => (theme.isDark ? "light" : "dark"), [theme.isDark]);
 
   useEffect(() => {
-    if (!authenticated) return undefined;
+    syncWeeklyCalendarReminder().catch(() => {});
+  }, []);
 
-    ensureWeeklyCalendarReminder().catch(() => {});
+  useEffect(() => {
+    if (!authenticated) return undefined;
 
     let cleanup = null;
     registerNotificationResponseHandler()
