@@ -284,6 +284,7 @@ item_drafts = Table(
     Column("processing_status", String(60), nullable=False),
     Column("catalog_id", String(48), ForeignKey("wardrobe_catalogs.id"), nullable=False),
     Column("original_file_id", String(48), ForeignKey("files.id"), nullable=True),
+    Column("editor_file_id", String(48), ForeignKey("files.id"), nullable=True),
     Column("processed_file_id", String(48), ForeignKey("files.id"), nullable=True),
     Column("mask_file_id", String(48), ForeignKey("files.id"), nullable=True),
     Column("catalog_file_id", String(48), ForeignKey("files.id"), nullable=True),

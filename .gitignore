@@ -54,5 +54,5 @@ __pycache__/
 /android
 
 # ML
-*.keras
-ml-vision-service/models/*.h5
+ml-vision-service/models/*.keras
+ml-catalog-service/models/*

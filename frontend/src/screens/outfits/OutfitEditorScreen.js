@@ -6,10 +6,10 @@ import Chip from "../../components/Chip";
 import SectionHeader from "../../components/SectionHeader";
 import ActionButton from "../../components/ActionButton";
 import OutfitCoverPreview from "../../components/OutfitCoverPreview";
-import MediaPreview from "../../components/MediaPreview";
 import SearchBar from "../../components/SearchBar";
 import WardrobeItemCard from "../../components/WardrobeItemCard";
 import WardrobeFiltersSheet from "../../components/WardrobeFiltersSheet";
+import WardrobeItemImage from "../../components/WardrobeItemImage";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { defaultOutfitDraft, syncCoverStateWithItems } from "../../utils/outfitCover";
@@ -44,14 +44,12 @@ function SelectedItemCard({ item, category, onRemove }) {
         padding: spacing.sm,
       }}
     >
-      <MediaPreview
+      <WardrobeItemImage
         source={item.image}
         placeholderScale={0.5}
         containerStyle={{
           width: "100%",
-          aspectRatio: 1,
           borderRadius: radius.md,
-          backgroundColor: colors.background,
         }}
       />
       <Text style={[typography.cardTitle, { color: colors.text, marginTop: spacing.sm }]} numberOfLines={1}>

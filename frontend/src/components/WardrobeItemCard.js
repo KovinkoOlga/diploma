@@ -2,8 +2,8 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
-import MediaPreview from "./MediaPreview";
 import CategoryIcon from "./CategoryIcon";
+import WardrobeItemImage from "./WardrobeItemImage";
 
 export default function WardrobeItemCard({
   item,
@@ -31,15 +31,13 @@ export default function WardrobeItemCard({
             padding: spacing.sm,
           },
         ]}
-      >
+        >
         <View style={{ position: "relative" }}>
-          <MediaPreview
+          <WardrobeItemImage
             source={item.image}
             containerStyle={{
               width: "100%",
-              aspectRatio: 0.86,
               borderRadius: radius.md,
-              backgroundColor: colors.background,
             }}
             placeholderScale={0.5}
           />

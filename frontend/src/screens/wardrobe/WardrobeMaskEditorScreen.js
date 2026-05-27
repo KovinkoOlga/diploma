@@ -506,6 +506,7 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   const returnRouteKey = route.params?.returnRouteKey ?? null;
   const [freshDraft, setFreshDraft] = useState(null);
   const hasLocalEditsRef = useRef(false);
+  const editorImageUrl = freshDraft?.editorImageUrl ?? route.params?.editorImageUrl;
   const originalImageUrl = freshDraft?.originalImageUrl ?? route.params?.originalImageUrl;
   const originalImagePreviewDataUrl = freshDraft?.originalImagePreviewDataUrl ?? route.params?.originalImagePreviewDataUrl;
   const maskBitmap = freshDraft?.maskBitmap ?? route.params?.maskBitmap;
@@ -539,6 +540,7 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [imageSize, setImageSize] = useState({ width: initialWidth, height: initialHeight });
+  const [editorAreaSize, setEditorAreaSize] = useState({ width: 1, height: 1 });
   const initialMaskDataRef = useRef(initialMaskPayload.data);
   const previewFrameRef = useRef(null);
   const previewFramePageRef = useRef({ x: 0, y: 0, width: 0, height: 0, measured: false });
@@ -561,9 +563,13 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
 
   const maskWidth = initialWidth;
   const maskHeight = initialHeight;
-  const imageUrl = originalImagePreviewDataUrl || originalImageUrl;
+  const imageUrl = editorImageUrl || originalImagePreviewDataUrl || originalImageUrl;
   const imageSource = useMemo(() => (imageUrl ? { uri: imageUrl } : null), [imageUrl]);
   const maskReady = initialMaskPayload.valid;
+  const previewFrameSize = useMemo(
+    () => fitRect(editorAreaSize, imageSize.width, imageSize.height),
+    [editorAreaSize, imageSize.height, imageSize.width]
+  );
   const displayRect = useMemo(() => fitRect(canvasSize, imageSize.width, imageSize.height), [canvasSize, imageSize]);
   const displayRectRef = useRef(displayRect);
   const overlayUri = useMemo(
@@ -628,6 +634,14 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
     setImageFailed(false);
     setImageSize({ width: maskWidth, height: maskHeight });
   }, [imageUrl, maskHeight, maskWidth]);
+
+  const handleEditorAreaLayout = useCallback((event) => {
+    const { width, height } = event.nativeEvent.layout;
+    setEditorAreaSize({
+      width: Math.max(1, width),
+      height: Math.max(1, height),
+    });
+  }, []);
 
   useEffect(() => {
     initialMaskDataRef.current = initialMaskPayload.data;
@@ -935,7 +949,7 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
       return;
     }
     if (!imageLoaded) {
-      setError("Исходное фото еще не загружено");
+      setError("Рабочее изображение еще не загружено");
       return;
     }
     setSaving(true);
@@ -964,7 +978,7 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
         updatedDraftState,
       });
     } catch (saveError) {
-      setError(saveError.message || "Не удалось сохранить обрезку");
+      setError(saveError.message || "Не удалось сохранить маску");
     } finally {
       setSaving(false);
     }
@@ -972,7 +986,7 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: "Редактор обрезки",
+      title: "Редактор маски",
       headerTitleAlign: "center",
       headerRight: () => (
         <Pressable
@@ -994,17 +1008,23 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
 
   const canEdit = Boolean(imageUrl && maskReady && !imageFailed);
   const imageErrorMessage = !imageUrl
-    ? "Исходное фото недоступно"
+    ? "Рабочее изображение недоступно"
     : !maskReady
       ? "Маска недоступна для редактирования"
-      : "Не удалось загрузить исходное фото";
+      : "Не удалось загрузить рабочее изображение";
 
   return (
-    <Screen style={{ backgroundColor: "#ffffff" }} edges={["left", "right"]} contentStyle={{ backgroundColor: "#050505" }}>
-      <View style={styles.editorArea}>
+    <Screen style={{ backgroundColor: "#ffffff" }} edges={["left", "right"]} contentStyle={{ backgroundColor: "#ffffff" }}>
+      <View style={styles.editorArea} onLayout={handleEditorAreaLayout}>
         <View
           ref={previewFrameRef}
-          style={[styles.previewFrame, { borderColor: colors.border }]}
+          style={[
+            styles.previewFrame,
+            {
+              width: Math.max(1, previewFrameSize.width),
+              height: Math.max(1, previewFrameSize.height),
+            },
+          ]}
           onLayout={handlePreviewLayout}
           {...(canEdit ? panResponder.panHandlers : {})}
         >
@@ -1040,14 +1060,14 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
               />
               {!imageLoaded ? (
                 <View style={styles.loadingLayer} pointerEvents="none">
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color="#1F1F1F" />
                 </View>
               ) : null}
             </>
           ) : (
             <View style={styles.messageBox}>
-              <Ionicons name="image-outline" size={28} color="#FFFFFF" />
-              <Text style={[typography.caption, { color: "#FFFFFF", textAlign: "center" }]}>{imageErrorMessage}</Text>
+              <Ionicons name="image-outline" size={28} color="#1F1F1F" />
+              <Text style={[typography.caption, { color: "#1F1F1F", textAlign: "center" }]}>{imageErrorMessage}</Text>
             </View>
           )}
         </View>
@@ -1187,12 +1207,17 @@ const styles = StyleSheet.create({
   },
   editorArea: {
     flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 140,
+    backgroundColor: "#FFFFFF",
   },
   previewFrame: {
-    flex: 1,
+    alignSelf: "center",
     overflow: "hidden",
-    borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
   },
   layerFrame: {
     ...StyleSheet.absoluteFillObject,
@@ -1201,7 +1226,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.18)",
+    backgroundColor: "rgba(255,255,255,0.72)",
   },
   toolbar: {
     position: "absolute",
@@ -1342,6 +1367,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 24,
+    backgroundColor: "#FFFFFF",
   },
   errorToast: {
     position: "absolute",

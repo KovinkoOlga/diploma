@@ -8,8 +8,8 @@ import CategorySubcategoryPicker from "./CategorySubcategoryPicker";
 import Chip from "./Chip";
 import CollapsibleColorSelector from "./CollapsibleColorSelector";
 import Input from "./Input";
-import MediaPreview from "./MediaPreview";
 import SectionHeader from "./SectionHeader";
+import WardrobeItemImage from "./WardrobeItemImage";
 
 function uniqueByNormalizedName(values) {
   const seen = new Set();
@@ -109,16 +109,13 @@ export default function WardrobeItemForm({
         }}
       >
         <Text style={[typography.cardTitle, { color: colors.text }]}>Карточка вещи</Text>
-        <MediaPreview
+        <WardrobeItemImage
           source={draft.image}
-          resizeMode="contain"
           placeholderScale={0.48}
           containerStyle={{
             width: "100%",
-            aspectRatio: 1,
             borderRadius: radius.lg,
             marginTop: spacing.md,
-            backgroundColor: colors.background,
           }}
         />
         {draftImages?.cutout || draftImages?.catalog ? (
@@ -127,14 +124,14 @@ export default function WardrobeItemForm({
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
               {draftImages?.cutout ? (
                 <Chip
-                  label="Cutout"
+                  label="Обрезанный фон"
                   selected={draft.primaryImageFileId === draftImages.cutout.fileId}
                   onPress={() => onSelectImageOption?.(draftImages.cutout)}
                 />
               ) : null}
               {draftImages?.catalog ? (
                 <Chip
-                  label="Catalog"
+                  label="Каталожный вид"
                   selected={draft.primaryImageFileId === draftImages.catalog.fileId}
                   onPress={() => onSelectImageOption?.(draftImages.catalog)}
                 />
@@ -143,7 +140,7 @@ export default function WardrobeItemForm({
             {onEditMask ? (
               <View style={{ marginTop: spacing.sm }}>
                 <ActionButton
-                  label="Редактировать обрезку"
+                  label="Редактировать маску"
                   icon="create-outline"
                   variant="secondary"
                   onPress={onEditMask}

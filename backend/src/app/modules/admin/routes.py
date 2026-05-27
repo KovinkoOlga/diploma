@@ -132,6 +132,7 @@ class ItemDraftAdmin(ModelView, model=ItemDraft):
         ItemDraft.catalog_processing_status,
         ItemDraft.catalog_id,
         ItemDraft.original_file_id,
+        ItemDraft.editor_file_id,
         ItemDraft.processed_file_id,
         ItemDraft.mask_file_id,
         ItemDraft.catalog_file_id,

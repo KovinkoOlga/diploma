@@ -6,12 +6,11 @@ from app.core.config import get_settings
 from app.db.database import engine
 from app.db.metadata import files, item_drafts
 from app.modules.files.service import (
-    create_image_file_with_variants,
     get_file_bytes,
-    transparent_cutout_variants,
 )
 from app.modules.ml_clients.vision_client import analyze_item_image
 from app.modules.ml_clients.catalog_client import generate_catalog_image
+from app.modules.wardrobe.image_processing import prepare_square_editor_assets
 from app.modules.wardrobe.service import (
     PRIMARY_ATTRIBUTES_SUGGESTED_STATUS,
     PRIMARY_FAILED_STATUS,
@@ -19,6 +18,7 @@ from app.modules.wardrobe.service import (
     PRIMARY_READY_STATUS,
     apply_internal_draft_progress,
     get_selectable_color_palette,
+    save_square_draft_artifacts,
 )
 from app.tasks.celery_app import celery_app, run_async_in_worker
 
@@ -83,7 +83,7 @@ async def run_prepare_item_photo(draft_id: str) -> None:
             return
         if draft["processing_status"] == PRIMARY_FAILED_STATUS:
             return
-        if draft["processing_status"] == PRIMARY_READY_STATUS and draft.get("processed_file_id") and draft.get("mask_file_id"):
+        if draft["processing_status"] == PRIMARY_READY_STATUS and draft.get("editor_file_id") and draft.get("processed_file_id") and draft.get("mask_file_id"):
             return
         if not draft.get("original_file_id"):
             async with engine.begin() as connection:
@@ -137,23 +137,25 @@ async def run_prepare_item_photo(draft_id: str) -> None:
         )
 
         async with engine.begin() as connection:
-            cutout_file_id = draft.get("processed_file_id") or await create_image_file_with_variants(
-                connection,
-                draft["user_id"],
-                transparent_cutout_variants(result.cutout_image),
-                f"cutout-{filename}",
-                result.mime_type,
+            prepared_assets = prepare_square_editor_assets(
+                original_bytes,
+                result.mask_image,
+                canvas_size=settings.wardrobe_image_canvas_size,
+                padding_ratio=settings.wardrobe_image_padding_ratio,
+                min_padding_px=settings.wardrobe_image_min_padding_px,
+                alpha_threshold=settings.wardrobe_image_alpha_threshold,
             )
-            mask_file_id = draft.get("mask_file_id") or await create_image_file_with_variants(
+            saved_file_ids = await save_square_draft_artifacts(
                 connection,
                 draft["user_id"],
-                {"mask": result.mask_image, "card": result.mask_image, "thumbnail": result.mask_image},
-                f"mask-{filename}",
-                result.mime_type,
+                draft_id,
+                square_source_bytes=prepared_assets["square_source_bytes"],
+                square_mask_bytes=prepared_assets["square_mask_bytes"],
+                square_cutout_bytes=prepared_assets["square_cutout_bytes"],
             )
 
             payload = dict(draft.get("suggested_payload_json") or {})
-            payload["primaryImageFileId"] = cutout_file_id
+            payload["primaryImageFileId"] = saved_file_ids["processed_file_id"]
             payload = _apply_ml_predictions_to_payload(
                 payload,
                 result.predictions if isinstance(result.predictions, dict) else {},
@@ -174,8 +176,9 @@ async def run_prepare_item_photo(draft_id: str) -> None:
                 update(item_drafts)
                 .where(item_drafts.c.id == draft_id)
                 .values(
-                    processed_file_id=cutout_file_id,
-                    mask_file_id=mask_file_id,
+                    editor_file_id=saved_file_ids["editor_file_id"],
+                    processed_file_id=saved_file_ids["processed_file_id"],
+                    mask_file_id=saved_file_ids["mask_file_id"],
                     processing_status=PRIMARY_ATTRIBUTES_SUGGESTED_STATUS,
                     suggested_payload_json=payload,
                     ml_result_json=ml_result,
@@ -226,7 +229,8 @@ async def run_enhance_catalog_photo(draft_id: str) -> None:
                     updated_at=datetime.now(timezone.utc),
                 )
             )
-            original_bytes = await get_file_bytes(connection, draft["original_file_id"], "original")
+            source_file_id = draft.get("editor_file_id") or draft["original_file_id"]
+            original_bytes = await get_file_bytes(connection, source_file_id, "original")
             cutout_bytes = await get_file_bytes(connection, draft["processed_file_id"], "cutout")
             mask_bytes = await get_file_bytes(connection, draft["mask_file_id"], "mask")
 

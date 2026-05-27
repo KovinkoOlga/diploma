@@ -1,6 +1,7 @@
 import React from "react";
 import { Text, View } from "react-native";
 import MediaPreview from "./MediaPreview";
+import WardrobeItemImage from "./WardrobeItemImage";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 export default function OutfitCoverPreview({ draft, previewItems }) {
@@ -29,15 +30,13 @@ export default function OutfitCoverPreview({ draft, previewItems }) {
   return (
     <View style={{ flexDirection: "row", gap: 8, marginTop: spacing.sm }}>
       {previewFromItems.map((item) => (
-        <MediaPreview
+        <WardrobeItemImage
           key={item.id}
           source={item.image}
           placeholderScale={0.48}
           containerStyle={{
             flex: 1,
-            aspectRatio: 0.82,
             borderRadius: radius.md,
-            backgroundColor: colors.background,
           }}
         />
       ))}

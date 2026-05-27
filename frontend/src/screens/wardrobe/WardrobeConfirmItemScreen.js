@@ -432,7 +432,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
             draftId &&
             draft.sourceType !== "catalog" &&
             draftState?.images?.cutout &&
-            (draftState?.originalImagePreviewDataUrl || draftState?.originalImageUrl) &&
+            (draftState?.editorImageUrl || draftState?.originalImagePreviewDataUrl || draftState?.originalImageUrl) &&
             draftState?.maskBitmap?.dataBase64
               ? () =>
                   actions.fetchDraft(draftId).then((latestDraftState) => {
@@ -446,6 +446,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
                       cutoutImageUrl: latestDraftState.images?.cutout?.imageUrl ?? draftState.images.cutout.imageUrl,
                       maskImageUrl: latestDraftState.maskImageUrl ?? draftState.maskImageUrl,
                       maskBitmap: latestDraftState.maskBitmap ?? draftState.maskBitmap,
+                      editorImageUrl: latestDraftState.editorImageUrl ?? draftState.editorImageUrl,
                       originalImagePreviewDataUrl:
                         latestDraftState.originalImagePreviewDataUrl ?? draftState.originalImagePreviewDataUrl,
                       originalImageUrl: latestDraftState.originalImageUrl ?? draftState.originalImageUrl,

@@ -8,13 +8,25 @@ Create Date: 2026-05-03
 from alembic import op
 
 from app.db.metadata import (
+    brands,
     categories,
     colors,
+    file_variants,
+    files,
+    item_colors,
+    item_drafts,
+    item_seasons,
     item_statuses,
-    metadata,
+    item_styles,
+    outfits,
+    outfit_items,
+    outfit_seasons,
     seasons,
     styles,
     subcategories,
+    users,
+    wardrobe_catalogs,
+    wardrobe_items,
     wardrobe_item_templates,
 )
 from app.modules.wardrobe.colors import SYSTEM_COLOR_CATALOG
@@ -57,9 +69,37 @@ TEMPLATES = [
 ]
 
 
+# Keep this revision bounded to the original base schema.
+# Newer tables must be introduced by their own migrations instead of
+# leaking in through the current application metadata.
+INITIAL_TABLES = [
+    files,
+    users,
+    file_variants,
+    wardrobe_catalogs,
+    categories,
+    subcategories,
+    colors,
+    brands,
+    seasons,
+    styles,
+    item_statuses,
+    wardrobe_items,
+    item_colors,
+    item_seasons,
+    item_styles,
+    outfits,
+    outfit_seasons,
+    outfit_items,
+    wardrobe_item_templates,
+    item_drafts,
+]
+
+
 def upgrade() -> None:
     bind = op.get_bind()
-    metadata.create_all(bind)
+    for table in INITIAL_TABLES:
+        table.create(bind, checkfirst=True)
 
     op.bulk_insert(
         categories,
@@ -137,4 +177,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    metadata.drop_all(bind)
+    for table in reversed(INITIAL_TABLES):
+        table.drop(bind, checkfirst=True)

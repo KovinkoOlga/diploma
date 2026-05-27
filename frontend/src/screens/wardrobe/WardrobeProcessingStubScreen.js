@@ -15,14 +15,22 @@ import {
   isPhotoBatchEntryWaitingForUpload,
 } from "../../utils/wardrobePhotoBatch";
 
-const steps = [
+const statusOrder = [
+  "queued",
+  "preparing",
+  "background_removing",
+  "category_recognizing",
+  "colors_extracting",
+  "attributes_suggested",
+  "ready",
+];
+
+const visibleSteps = [
   { status: "queued", title: "Ожидает обработки" },
   { status: "preparing", title: "Подготавливаем изображение" },
   { status: "background_removing", title: "Удаляем фон" },
   { status: "category_recognizing", title: "Определяем категорию и подкатегорию" },
   { status: "colors_extracting", title: "Определяем цвета" },
-  { status: "attributes_suggested", title: "Готовим карточку вещи" },
-  { status: "ready", title: "Карточка готова" },
 ];
 
 const statusDescriptions = {
@@ -31,14 +39,23 @@ const statusDescriptions = {
   background_removing: "Удаляем фон на стороне vision-сервиса.",
   category_recognizing: "Определяем категорию и подкатегорию вещи.",
   colors_extracting: "Извлекаем основные цвета из изображения.",
-  attributes_suggested: "Сохраняем вырезанную вещь и собираем карточку для подтверждения.",
-  ready: "Карточка готова. Открываем форму подтверждения.",
 };
 
-function stepDone(currentStatus, stepIndex) {
+function getStatusIndex(status) {
+  return statusOrder.findIndex((entry) => entry === status);
+}
+
+function stepDone(currentStatus, stepStatus) {
   if (!currentStatus) return false;
-  const currentIndex = steps.findIndex((step) => step.status === currentStatus);
-  return currentIndex >= stepIndex;
+  const currentIndex = getStatusIndex(currentStatus);
+  const stepIndex = getStatusIndex(stepStatus);
+  return currentIndex >= 0 && stepIndex >= 0 && currentIndex >= stepIndex;
+}
+
+function getVisibleStatus(currentStatus) {
+  const currentIndex = getStatusIndex(currentStatus);
+  if (currentIndex < 0) return null;
+  return [...visibleSteps].reverse().find((step) => getStatusIndex(step.status) <= currentIndex) ?? visibleSteps[0];
 }
 
 export default function WardrobeProcessingStubScreen({ navigation, route }) {
@@ -257,8 +274,8 @@ export default function WardrobeProcessingStubScreen({ navigation, route }) {
 
   const currentStatus = currentEntry?.processingStatus ?? draftState?.processingStatus ?? null;
   const ready = Boolean(draftState?.ready);
-  const currentStep = steps.find((step) => step.status === currentStatus) ?? null;
-  const statusDescription = currentStatus ? statusDescriptions[currentStatus] : "";
+  const currentStep = getVisibleStatus(currentStatus);
+  const statusDescription = currentStep ? statusDescriptions[currentStep.status] : "";
 
   if (isBatchMode && !batch) {
     return (
@@ -324,12 +341,12 @@ export default function WardrobeProcessingStubScreen({ navigation, route }) {
       </View>
 
       <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
-        {steps.map((step, index) => (
+        {visibleSteps.map((step, index) => (
           <View
             key={step.status}
             style={{
               borderWidth: 1,
-              borderColor: stepDone(currentStatus, index) ? colors.text : colors.border,
+              borderColor: stepDone(currentStatus, step.status) ? colors.text : colors.border,
               borderRadius: radius.lg,
               backgroundColor: colors.secondaryBackground,
               padding: spacing.md,

@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     backend_internal_url: str = "http://backend:8000"
     internal_service_token: str = "change-me-in-local-dev"
     weather_api_base_url: str = "https://api.open-meteo.com/v1"
+    wardrobe_image_canvas_size: int = 512
+    wardrobe_image_padding_ratio: float = 0.22
+    wardrobe_image_min_padding_px: int = 48
+    wardrobe_image_alpha_threshold: int = 8
 
     cors_origins: str = "http://localhost:8081,http://localhost:19006"
 

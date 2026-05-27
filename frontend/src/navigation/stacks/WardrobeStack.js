@@ -68,7 +68,7 @@ export default function WardrobeStack() {
         component={WardrobeConfirmItemScreen}
         options={{ title: "Подтверждение", headerBackButtonMenuEnabled: false }}
       />
-      <Stack.Screen name={Routes.WardrobeMaskEditor} component={WardrobeMaskEditorScreen} options={{ title: "Редактор обрезки" }} />
+      <Stack.Screen name={Routes.WardrobeMaskEditor} component={WardrobeMaskEditorScreen} options={{ title: "Редактор маски" }} />
       <Stack.Screen name={Routes.WardrobeManageCatalogs} component={WardrobeManageCatalogsScreen} options={{ title: "Справочники" }} />
       <Stack.Screen name={Routes.WardrobeManageCategories} component={WardrobeManageCategoriesScreen} options={{ title: "Категории" }} />
       <Stack.Screen name={Routes.WardrobeArchive} component={WardrobeArchiveScreen} options={{ title: "Архив" }} />

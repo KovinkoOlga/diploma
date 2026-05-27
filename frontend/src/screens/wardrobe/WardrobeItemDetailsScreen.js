@@ -4,10 +4,10 @@ import Screen from "../../components/Screen";
 import ActionButton from "../../components/ActionButton";
 import ColorDot from "../../components/ColorDot";
 import EmptyState from "../../components/EmptyState";
-import MediaPreview from "../../components/MediaPreview";
 import SectionHeader from "../../components/SectionHeader";
 import Chip from "../../components/Chip";
 import SheetModal from "../../components/SheetModal";
+import WardrobeItemImage from "../../components/WardrobeItemImage";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { useWardrobe } from "../../store/WardrobeStore";
 import { Routes } from "../../navigation/routes";
@@ -129,12 +129,11 @@ export default function WardrobeItemDetailsScreen({ navigation, route }) {
 
   return (
     <Screen scroll padded>
-      <MediaPreview
+      <WardrobeItemImage
         source={item.image}
         placeholderScale={0.48}
         containerStyle={{
           width: "100%",
-          aspectRatio: 1,
           borderRadius: radius.xl,
           backgroundColor: colors.secondaryBackground,
         }}
