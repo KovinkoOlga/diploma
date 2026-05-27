@@ -6,11 +6,13 @@ from app.core.config import get_settings
 from app.db.database import engine
 from app.db.metadata import files, item_drafts
 from app.modules.files.service import (
+    create_image_file_with_variants,
     get_file_bytes,
 )
+from app.modules.ml_clients.catalog_client import CatalogGenerationError, generate_catalog_image
 from app.modules.ml_clients.vision_client import analyze_item_image
-from app.modules.ml_clients.catalog_client import generate_catalog_image
 from app.modules.wardrobe.image_processing import prepare_square_editor_assets
+from app.modules.wardrobe.colors import normalize_color_ids
 from app.modules.wardrobe.service import (
     PRIMARY_ATTRIBUTES_SUGGESTED_STATUS,
     PRIMARY_FAILED_STATUS,
@@ -39,6 +41,26 @@ def _merge_ml_result(current: dict | None, key: str, value: dict) -> dict:
     merged = dict(current or {})
     merged[key] = {**(merged.get(key) or {}), **value}
     return merged
+
+
+def _catalog_pipeline_error_metadata(
+    *,
+    category: str | None,
+    subcategory_id: str | None,
+    subcategory_name: str | None,
+    color_ids: list[str],
+    error_message: str,
+    total_time_ms: int,
+) -> dict:
+    return {
+        "category": category or "unknown",
+        "subcategory_id": subcategory_id,
+        "subcategory_name": subcategory_name,
+        "color_ids": color_ids,
+        "generation_status": "failed",
+        "error_message": error_message,
+        "timings_ms": {"total": total_time_ms},
+    }
 
 
 async def _file_name(file_id: str | None) -> str:
@@ -74,6 +96,35 @@ def _apply_ml_predictions_to_payload(payload: dict, predictions: dict | None) ->
         next_payload["colorIds"] = color_ids
     next_payload["colorPrediction"] = colors_prediction
     return next_payload
+
+
+def _payload_color_ids(payload: dict) -> list[str]:
+    raw_values = payload.get("colorIds")
+    if isinstance(raw_values, list) and raw_values:
+        return normalize_color_ids(str(value) for value in raw_values)
+
+    prediction = payload.get("colorPrediction") or {}
+    predicted_values = prediction.get("color_ids") if isinstance(prediction, dict) else []
+    if isinstance(predicted_values, list):
+        return normalize_color_ids(str(value) for value in predicted_values)
+    return []
+
+
+def _resolve_catalog_generation_context(payload: dict) -> dict[str, str | list[str] | None]:
+    category_prediction = payload.get("categoryPrediction") if isinstance(payload.get("categoryPrediction"), dict) else {}
+    category_hint = str(payload.get("categoryId") or category_prediction.get("categoryId") or "").strip() or None
+    subcategory_name = (
+        str(payload.get("subcategory") or payload.get("subcategoryName") or category_prediction.get("subcategory") or "").strip()
+        or None
+    )
+    subcategory_id = str(payload.get("subcategoryId") or category_prediction.get("subcategoryId") or "").strip() or None
+    color_ids = _payload_color_ids(payload)
+    return {
+        "category_hint": category_hint,
+        "subcategory_id": subcategory_id,
+        "subcategory_name": subcategory_name,
+        "color_ids": color_ids,
+    }
 
 
 async def run_prepare_item_photo(draft_id: str) -> None:
@@ -210,14 +261,14 @@ async def run_prepare_item_photo(draft_id: str) -> None:
 
 
 async def run_enhance_catalog_photo(draft_id: str) -> None:
+    draft: dict | None = None
+    started: datetime | None = None
     try:
         draft = await _get_draft_row(draft_id)
         if draft is None:
             return
         if draft["processing_status"] != PRIMARY_READY_STATUS:
             raise ValueError("Draft is not ready")
-        if draft.get("catalog_processing_status") == CATALOG_READY_STATUS and draft.get("catalog_file_id"):
-            return
 
         async with engine.begin() as connection:
             await connection.execute(
@@ -250,29 +301,58 @@ async def run_enhance_catalog_photo(draft_id: str) -> None:
         started = datetime.now(timezone.utc)
         filename = await _file_name(draft["original_file_id"])
         payload = dict(draft.get("suggested_payload_json") or {})
+        generation_context = _resolve_catalog_generation_context(payload)
         result = await generate_catalog_image(
             original_bytes,
             cutout_bytes,
             mask_bytes,
             filename=filename,
-            category_hint=payload.get("categoryId"),
+            category_hint=generation_context["category_hint"],
+            subcategory_id=generation_context["subcategory_id"],
+            subcategory_name=generation_context["subcategory_name"],
+            color_ids=generation_context["color_ids"],
         )
 
         async with engine.begin() as connection:
-            catalog_file_id = draft.get("catalog_file_id") or await create_image_file_with_variants(
+            catalog_file_id = await create_image_file_with_variants(
                 connection,
                 draft["user_id"],
                 {"catalog": result.catalog_image, "card": result.catalog_image, "thumbnail": result.catalog_image},
                 f"catalog-{filename}",
                 result.mime_type,
             )
+            updated_payload = dict(payload)
+            if updated_payload.get("primaryImageFileId") == draft.get("catalog_file_id"):
+                updated_payload["primaryImageFileId"] = catalog_file_id
+                updated_payload.pop("image", None)
             ml_result = _merge_ml_result(
                 draft.get("ml_result_json"),
                 "catalog_pipeline",
                 {
+                    "provider": result.provider,
                     "model_used": result.model_used,
+                    "category": result.category,
+                    "subcategory_id": result.subcategory_id,
+                    "subcategory_name": result.subcategory_name,
+                    "subcategory_prompt_text": result.subcategory_prompt_text,
+                    "color_ids": result.color_ids,
+                    "color_prompt_text": result.color_prompt_text,
+                    "generation_status": result.generation_status,
                     "fallback_used": result.fallback_used,
-                    "timings_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
+                    "deterministic": result.deterministic,
+                    "seed": result.seed,
+                    "ip_adapter_weight_name": result.debug.get("ip_adapter_weight_name") if isinstance(result.debug, dict) else None,
+                    "ip_adapter_scale": result.debug.get("ip_adapter_scale") if isinstance(result.debug, dict) else None,
+                    "mask_mode": result.debug.get("mask_mode") if isinstance(result.debug, dict) else None,
+                    "mask_expand_px": result.debug.get("mask_expand_px") if isinstance(result.debug, dict) else None,
+                    "mask_blur_px": result.debug.get("mask_blur_px") if isinstance(result.debug, dict) else None,
+                    "strength": result.debug.get("strength") if isinstance(result.debug, dict) else None,
+                    "guidance_scale": result.debug.get("guidance_scale") if isinstance(result.debug, dict) else None,
+                    "num_inference_steps": result.debug.get("num_inference_steps") if isinstance(result.debug, dict) else None,
+                    "transparent_background": result.debug.get("transparent_background") if isinstance(result.debug, dict) else None,
+                    "result_margin_ratio": result.debug.get("result_margin_ratio") if isinstance(result.debug, dict) else None,
+                    "debug": result.debug,
+                    "timings_ms": {"total": int((datetime.now(timezone.utc) - started).total_seconds() * 1000)},
                 },
             )
             await connection.execute(
@@ -281,11 +361,16 @@ async def run_enhance_catalog_photo(draft_id: str) -> None:
                 .values(
                     catalog_file_id=catalog_file_id,
                     catalog_processing_status=CATALOG_READY_STATUS,
+                    catalog_error_message=None,
+                    suggested_payload_json=updated_payload,
                     ml_result_json=ml_result,
                     updated_at=datetime.now(timezone.utc),
                 )
             )
-    except Exception as exc:
+    except CatalogGenerationError as exc:
+        payload = dict((draft or {}).get("suggested_payload_json") or {})
+        generation_context = _resolve_catalog_generation_context(payload)
+        total_time_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000) if started else 0
         async with engine.begin() as connection:
             await connection.execute(
                 update(item_drafts)
@@ -293,6 +378,44 @@ async def run_enhance_catalog_photo(draft_id: str) -> None:
                 .values(
                     catalog_processing_status=CATALOG_FAILED_STATUS,
                     catalog_error_message=str(exc),
+                    ml_result_json=_merge_ml_result(
+                        draft.get("ml_result_json") if draft else None,
+                        "catalog_pipeline",
+                        _catalog_pipeline_error_metadata(
+                            category=generation_context["category_hint"],
+                            subcategory_id=generation_context["subcategory_id"],
+                            subcategory_name=generation_context["subcategory_name"],
+                            color_ids=list(generation_context["color_ids"] or []),
+                            error_message=str(exc),
+                            total_time_ms=total_time_ms,
+                        ),
+                    ),
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+    except Exception as exc:
+        payload = dict((draft or {}).get("suggested_payload_json") or {})
+        generation_context = _resolve_catalog_generation_context(payload)
+        total_time_ms = int((datetime.now(timezone.utc) - started).total_seconds() * 1000) if started else 0
+        async with engine.begin() as connection:
+            await connection.execute(
+                update(item_drafts)
+                .where(item_drafts.c.id == draft_id)
+                .values(
+                    catalog_processing_status=CATALOG_FAILED_STATUS,
+                    catalog_error_message=str(exc),
+                    ml_result_json=_merge_ml_result(
+                        draft.get("ml_result_json") if draft else None,
+                        "catalog_pipeline",
+                        _catalog_pipeline_error_metadata(
+                            category=generation_context["category_hint"],
+                            subcategory_id=generation_context["subcategory_id"],
+                            subcategory_name=generation_context["subcategory_name"],
+                            color_ids=list(generation_context["color_ids"] or []),
+                            error_message=str(exc),
+                            total_time_ms=total_time_ms,
+                        ),
+                    ),
                     updated_at=datetime.now(timezone.utc),
                 )
             )

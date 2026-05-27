@@ -47,19 +47,37 @@ services:
     ports:
       - "8001:8001"
 
-  # ml-catalog-service:
-  #   build:
-  #     context: ./ml-catalog-service
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     CATALOG_DEVICE: auto
-  #     CATALOG_ENABLE_STUB: "false"
-  #     HF_HOME: /app/.cache/huggingface
-  #   ports:
-  #     - "8002:8002"
-  #   volumes:
-  #     - hf_cache:/app/.cache/huggingface
+  ml-catalog-service:
+    build:
+      context: ./ml-catalog-service
+    env_file:
+      - .env
+    environment:
+      CATALOG_PROVIDER: sd15_ip_adapter_inpaint
+      CATALOG_SD15_INPAINT_MODEL_ID: /app/models/sd15-inpainting-fp16
+      CATALOG_IP_ADAPTER_MODEL_ID: /app/models/ip-adapter-sd15
+      CATALOG_IP_ADAPTER_SUBFOLDER: models
+      CATALOG_IP_ADAPTER_WEIGHT_NAME: ip-adapter_sd15_light.safetensors
+      CATALOG_MODEL_VARIANT: fp16
+      CATALOG_LOCAL_FILES_ONLY: "true"
+      CATALOG_DEVICE: cpu
+      CATALOG_TORCH_DTYPE: float32
+      CATALOG_OUTPUT_SIZE: "512"
+      CATALOG_NUM_INFERENCE_STEPS: "25"
+      CATALOG_GUIDANCE_SCALE: "7.0"
+      CATALOG_STRENGTH: "0.75"
+      CATALOG_IP_ADAPTER_SCALE: "0.65"
+      CATALOG_MASK_MODE: full_item
+      CATALOG_MASK_EXPAND_PX: "16"
+      CATALOG_MASK_BLUR_PX: "8"
+      CATALOG_DETERMINISTIC: "false"
+      CATALOG_TRANSPARENT_BACKGROUND: "true"
+      CATALOG_RESULT_MARGIN_RATIO: "0.06"
+      CATALOG_POST_SHARPEN_ENABLED: "true"
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./ml-catalog-service/models:/app/models:ro
 
   backend:
     build:
@@ -82,8 +100,8 @@ services:
         condition: service_started
       ml-vision-service:
         condition: service_started
-      # ml-catalog-service:
-      #   condition: service_started
+      ml-catalog-service:
+        condition: service_started
 
   celery-worker:
     build:
@@ -112,20 +130,19 @@ services:
         condition: service_started
       ml-vision-service:
         condition: service_started
-      # ml-catalog-service:
-      #   condition: service_started
+      ml-catalog-service:
+        condition: service_started
 
-  # pgadmin:
-  #   container_name: pgadmin
-  #   image: dpage/pgadmin4
-  #   ports:
-  #     - 5050:80
-  #   env_file:
-  #     - .env
-  #   depends_on:
-  #     migrations:
-  #       condition: service_completed_successfully
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4
+    ports:
+      - 5050:80
+    env_file:
+      - .env
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
-  hf_cache:

@@ -1584,7 +1584,7 @@ async def enhance_draft(connection: AsyncConnection, user_id: str, draft_id: str
     if not row.get("processed_file_id") or not row.get("mask_file_id") or not (row.get("editor_file_id") or row.get("original_file_id")):
         raise ValueError("Draft does not have enough ML artifacts for catalog enhancement")
     catalog_status = row.get("catalog_processing_status") or CATALOG_NOT_REQUESTED_STATUS
-    if catalog_status in {CATALOG_QUEUED_STATUS, CATALOG_PROCESSING_STATUS, CATALOG_READY_STATUS}:
+    if catalog_status in {CATALOG_QUEUED_STATUS, CATALOG_PROCESSING_STATUS}:
         return await _serialize_draft(connection, row)
 
     await connection.execute(
