@@ -28,10 +28,12 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [pendingBackupOnboarding, setPendingBackupOnboarding] = useState(false);
 
   const clearSession = useCallback(async () => {
     await clearStoredTokens();
     setCurrentUser(null);
+    setPendingBackupOnboarding(false);
   }, []);
 
   useEffect(() => {
@@ -52,8 +54,11 @@ export function AuthProvider({ children }) {
         setAuthTokens({ accessToken, refreshToken });
         const session = await authApi.refresh(refreshToken);
         await saveTokens(session);
-        if (alive) setCurrentUser(session.user);
-      } catch (error) {
+        if (alive) {
+          setCurrentUser(session.user);
+          setPendingBackupOnboarding(false);
+        }
+      } catch {
         await clearStoredTokens();
       } finally {
         if (alive) setBootstrapping(false);
@@ -66,20 +71,65 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = useCallback(async (email, password) => {
+  const requestLoginCode = useCallback(async (email) => {
     setAuthError("");
-    const session = await authApi.login({ email, password });
+    return authApi.requestLoginCode(email);
+  }, []);
+
+  const verifyLoginCode = useCallback(async (email, code) => {
+    setAuthError("");
+    const session = await authApi.verifyLoginCode(email, code);
     await saveTokens(session);
     setCurrentUser(session.user);
+    setPendingBackupOnboarding(false);
     return session.user;
   }, []);
 
-  const register = useCallback(async (email, password) => {
+  const requestRegisterCode = useCallback(async (email) => {
     setAuthError("");
-    const session = await authApi.register({ email, password });
+    return authApi.requestRegisterCode(email);
+  }, []);
+
+  const verifyRegisterCode = useCallback(async (email, code) => {
+    setAuthError("");
+    const session = await authApi.verifyRegisterCode(email, code);
     await saveTokens(session);
     setCurrentUser(session.user);
+    setPendingBackupOnboarding(true);
     return session.user;
+  }, []);
+
+  const setBackupEmail = useCallback(async (backupEmail) => {
+    const user = await authApi.setBackupEmail(backupEmail);
+    setCurrentUser(user);
+    return user;
+  }, []);
+
+  const deleteBackupEmail = useCallback(async () => {
+    const user = await authApi.deleteBackupEmail();
+    setCurrentUser(user);
+    return user;
+  }, []);
+
+  const requestBackupEmailCode = useCallback(async () => authApi.requestBackupEmailCode(), []);
+
+  const verifyBackupEmailCode = useCallback(async (code) => {
+    const user = await authApi.verifyBackupEmailCode(code);
+    setCurrentUser(user);
+    setPendingBackupOnboarding(false);
+    return user;
+  }, []);
+
+  const requestPrimaryEmailChange = useCallback(async (newEmail) => authApi.requestPrimaryEmailChange(newEmail), []);
+
+  const verifyPrimaryEmailChange = useCallback(async (newEmail, code) => {
+    const user = await authApi.verifyPrimaryEmailChange(newEmail, code);
+    setCurrentUser(user);
+    return user;
+  }, []);
+
+  const skipBackupOnboarding = useCallback(() => {
+    setPendingBackupOnboarding(false);
   }, []);
 
   const logout = useCallback(async () => {
@@ -109,14 +159,44 @@ export function AuthProvider({ children }) {
       bootstrapping,
       authError,
       setAuthError,
-      login,
-      register,
+      pendingBackupOnboarding,
+      requestLoginCode,
+      verifyLoginCode,
+      requestRegisterCode,
+      verifyRegisterCode,
+      setBackupEmail,
+      deleteBackupEmail,
+      requestBackupEmailCode,
+      verifyBackupEmailCode,
+      requestPrimaryEmailChange,
+      verifyPrimaryEmailChange,
+      skipBackupOnboarding,
       logout,
       updateProfile,
       uploadAvatar,
       clearSession,
     }),
-    [authError, bootstrapping, clearSession, currentUser, login, logout, register, updateProfile, uploadAvatar]
+    [
+      authError,
+      bootstrapping,
+      clearSession,
+      currentUser,
+      logout,
+      pendingBackupOnboarding,
+      requestBackupEmailCode,
+      requestLoginCode,
+      requestPrimaryEmailChange,
+      requestRegisterCode,
+      setBackupEmail,
+      deleteBackupEmail,
+      skipBackupOnboarding,
+      updateProfile,
+      uploadAvatar,
+      verifyBackupEmailCode,
+      verifyLoginCode,
+      verifyPrimaryEmailChange,
+      verifyRegisterCode,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

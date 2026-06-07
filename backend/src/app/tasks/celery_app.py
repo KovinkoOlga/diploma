@@ -17,7 +17,7 @@ celery_app = Celery(
     "wardrobe",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.wardrobe_tasks"],
+    include=["app.tasks.wardrobe_tasks", "app.tasks.email_tasks"],
 )
 
 celery_app.conf.update(

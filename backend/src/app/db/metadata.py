@@ -25,10 +25,20 @@ users = Table(
     metadata,
     Column("id", String(48), primary_key=True),
     Column("email", String(255), nullable=False, unique=True),
-    Column("password_hash", String(255), nullable=False),
+    Column("email_verified_at", DateTime(timezone=True), nullable=False),
+    Column("backup_email", String(255), nullable=True),
+    Column("backup_email_verified_at", DateTime(timezone=True), nullable=True),
+    Column("backup_email_added_at", DateTime(timezone=True), nullable=True),
     Column("display_name", String(255), nullable=False, default=""),
     Column("avatar_file_id", String(48), ForeignKey("files.id"), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+Index(
+    "ix_users_confirmed_backup_email_unique",
+    users.c.backup_email,
+    unique=True,
+    postgresql_where=(users.c.backup_email.is_not(None) & users.c.backup_email_verified_at.is_not(None)),
 )
 
 refresh_sessions = Table(
@@ -44,6 +54,37 @@ refresh_sessions = Table(
     Column("user_agent", String(255), nullable=False, default=""),
     Column("device_name", String(120), nullable=False, default=""),
 )
+
+email_verification_codes = Table(
+    "email_verification_codes",
+    metadata,
+    Column("id", String(48), primary_key=True),
+    Column("user_id", String(48), ForeignKey("users.id", ondelete="CASCADE"), nullable=True),
+    Column("email", String(255), nullable=False),
+    Column("purpose", String(40), nullable=False),
+    Column("code_hash", String(128), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("consumed_at", DateTime(timezone=True), nullable=True),
+    Column("attempts_count", Integer, nullable=False, default=0),
+    Column("resend_count", Integer, nullable=False, default=0),
+    Column("next_resend_at", DateTime(timezone=True), nullable=True),
+    Column("metadata_json", JSON, nullable=True),
+)
+
+Index(
+    "ix_email_verification_codes_email_purpose_created_at",
+    email_verification_codes.c.email,
+    email_verification_codes.c.purpose,
+    email_verification_codes.c.created_at,
+)
+Index(
+    "ix_email_verification_codes_user_purpose_created_at",
+    email_verification_codes.c.user_id,
+    email_verification_codes.c.purpose,
+    email_verification_codes.c.created_at,
+)
+Index("ix_email_verification_codes_expires_at", email_verification_codes.c.expires_at)
 
 files = Table(
     "files",

@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy import select, update
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.db.database import get_connection
@@ -22,15 +21,10 @@ async def update_profile(
     connection: AsyncConnection = Depends(get_connection),
 ) -> UserResponse:
     values = {}
-    if payload.email is not None:
-        values["email"] = payload.email.lower()
     if payload.displayName is not None:
         values["display_name"] = payload.displayName.strip()
     if values:
-        try:
-            await connection.execute(update(users).where(users.c.id == current_user["id"]).values(**values))
-        except IntegrityError:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        await connection.execute(update(users).where(users.c.id == current_user["id"]).values(**values))
     row = (await connection.execute(select(users).where(users.c.id == current_user["id"]))).mappings().one()
     return await user_response(connection, dict(row))
 
@@ -52,4 +46,3 @@ async def update_avatar(
     await connection.execute(update(users).where(users.c.id == current_user["id"]).values(avatar_file_id=file_id))
     row = (await connection.execute(select(users).where(users.c.id == current_user["id"]))).mappings().one()
     return await user_response(connection, dict(row))
-

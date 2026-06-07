@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 from sqlalchemy import func, insert, select
@@ -35,8 +35,18 @@ async def connection():
         await conn.execute(
             insert(users),
             [
-                {"id": "user_1", "email": "user1@example.com", "password_hash": "hash", "display_name": "User 1"},
-                {"id": "user_2", "email": "user2@example.com", "password_hash": "hash", "display_name": "User 2"},
+                {
+                    "id": "user_1",
+                    "email": "user1@example.com",
+                    "email_verified_at": datetime.now(timezone.utc),
+                    "display_name": "User 1",
+                },
+                {
+                    "id": "user_2",
+                    "email": "user2@example.com",
+                    "email_verified_at": datetime.now(timezone.utc),
+                    "display_name": "User 2",
+                },
             ],
         )
         await conn.execute(

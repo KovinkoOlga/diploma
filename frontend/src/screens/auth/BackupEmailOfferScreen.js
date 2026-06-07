@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Text, View } from "react-native";
 import Screen from "../../components/Screen";
 import Input from "../../components/Input";
@@ -9,33 +9,26 @@ import { useAuth } from "../../store/AuthStore";
 import { getAuthErrorMessage, isValidEmail, normalizeEmail } from "../../utils/authFlow";
 
 
-export default function AuthScreen() {
+export default function BackupEmailOfferScreen() {
   const { colors, typography, spacing, radius } = useAppTheme();
-  const { requestLoginCode, verifyLoginCode, requestRegisterCode, verifyRegisterCode } = useAuth();
-  const [mode, setMode] = useState("login");
+  const { setBackupEmail, requestBackupEmailCode, verifyBackupEmailCode, skipBackupOnboarding } = useAuth();
   const [step, setStep] = useState("email");
-  const [email, setEmail] = useState("");
+  const [backupEmail, setBackupEmailValue] = useState("");
   const [code, setCode] = useState("");
-  const [emailTouched, setEmailTouched] = useState(false);
-  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState("");
   const [nextResendAt, setNextResendAt] = useState(null);
 
-  const normalizedEmail = normalizeEmail(email);
-  const emailValid = isValidEmail(normalizedEmail);
-  const canRequestCode = useMemo(() => emailValid && !submitting, [emailValid, submitting]);
-  const showEmailError = (emailTouched || submitAttempted) && !emailValid;
+  const normalizedBackupEmail = normalizeEmail(backupEmail);
 
-  async function handleRequestCode() {
-    setSubmitAttempted(true);
-    if (!canRequestCode) return;
+  async function handleSaveBackupEmail() {
+    if (!isValidEmail(normalizedBackupEmail) || submitting) return;
     setSubmitting(true);
     setError("");
     try {
-      const response =
-        mode === "login" ? await requestLoginCode(normalizedEmail) : await requestRegisterCode(normalizedEmail);
+      await setBackupEmail(normalizedBackupEmail);
+      const response = await requestBackupEmailCode();
       setNextResendAt(response?.nextResendAt ?? null);
       setStep("code");
       setCode("");
@@ -51,11 +44,7 @@ export default function AuthScreen() {
     setSubmitting(true);
     setError("");
     try {
-      if (mode === "login") {
-        await verifyLoginCode(normalizedEmail, code.trim());
-      } else {
-        await verifyRegisterCode(normalizedEmail, code.trim());
-      }
+      await verifyBackupEmailCode(code.trim());
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError));
     } finally {
@@ -68,10 +57,8 @@ export default function AuthScreen() {
     setResendLoading(true);
     setError("");
     try {
-      const response =
-        mode === "login" ? await requestLoginCode(normalizedEmail) : await requestRegisterCode(normalizedEmail);
+      const response = await requestBackupEmailCode();
       setNextResendAt(response?.nextResendAt ?? null);
-      setCode("");
     } catch (requestError) {
       setError(getAuthErrorMessage(requestError));
     } finally {
@@ -81,10 +68,10 @@ export default function AuthScreen() {
 
   if (step === "code") {
     return (
-      <Screen padded withKeyboard contentStyle={{ justifyContent: "center" }}>
+      <Screen padded withKeyboard>
         <EmailCodeCard
-          title="Введите код"
-          description={`Мы отправили код на ${normalizedEmail}`}
+          title="Подтвердите резервную почту"
+          description={`Мы отправили код на ${normalizedBackupEmail}`}
           code={code}
           onChangeCode={(value) => {
             setCode(value.replace(/\D/g, ""));
@@ -94,69 +81,60 @@ export default function AuthScreen() {
           onResend={handleResendCode}
           onBack={() => {
             setStep("email");
-            setCode("");
             setError("");
           }}
+          onSkip={skipBackupOnboarding}
           submitting={submitting}
           resendLoading={resendLoading}
           nextResendAt={nextResendAt}
           error={error}
-          marginTop={0}
-          codeInputVariant="otp"
         />
       </Screen>
     );
   }
 
   return (
-    <Screen padded withKeyboard contentStyle={{ justifyContent: "center" }}>
+    <Screen padded withKeyboard>
       <View
         style={{
+          marginTop: spacing.xxl,
           borderRadius: radius.xl,
           backgroundColor: colors.secondaryBackground,
           padding: spacing.lg,
         }}
       >
-        <Text style={[typography.h1, { color: colors.text }]}>{mode === "login" ? "Вход" : "Регистрация"}</Text>
+        <Text style={[typography.h1, { color: colors.text }]}>Укажите резервную почту</Text>
         <Text style={[typography.body, { color: colors.secondaryText, marginTop: spacing.sm }]}>
-          Введите почту, и мы отправим код для входа в приложение.
+          Резервная почта поможет сохранить доступ к цифровому гардеробу, если вы потеряете доступ к основной почте.
         </Text>
 
         <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.lg }]}>Email</Text>
         <Input
-          value={email}
+          value={backupEmail}
           onChangeText={(value) => {
-            setEmail(value);
+            setBackupEmailValue(value);
             setError("");
           }}
-          onBlur={() => setEmailTouched(true)}
-          placeholder="you@example.com"
+          placeholder="backup@example.com"
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
           style={{ marginTop: 6 }}
         />
-        {showEmailError ? (
-          <Text style={[typography.meta, { color: colors.danger, marginTop: 6 }]}>Введите корректный email</Text>
-        ) : null}
         {error ? <Text style={[typography.body, { color: colors.danger, marginTop: spacing.sm }]}>{error}</Text> : null}
 
         <ActionButton
-          label={submitting ? "Подождите..." : "Получить код"}
+          label={submitting ? "Подождите..." : "Подтвердить"}
           icon="mail-outline"
-          onPress={handleRequestCode}
-          disabled={!canRequestCode}
+          onPress={handleSaveBackupEmail}
+          disabled={submitting || !isValidEmail(normalizedBackupEmail)}
           style={{ marginTop: spacing.lg }}
           fullWidth
         />
         <ActionButton
-          label={mode === "login" ? "Зарегистрироваться" : "Уже есть аккаунт"}
+          label="Пропустить"
           variant="ghost"
-          onPress={() => {
-            setMode((current) => (current === "login" ? "register" : "login"));
-            setError("");
-            setSubmitAttempted(false);
-          }}
+          onPress={skipBackupOnboarding}
           style={{ marginTop: spacing.sm }}
           fullWidth
         />

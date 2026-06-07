@@ -9,6 +9,7 @@ import ActionButton from "../../components/ActionButton";
 import SectionHeader from "../../components/SectionHeader";
 import { useAppTheme } from "../../theme/ThemeProvider";
 import { useAuth } from "../../store/AuthStore";
+import ProfileEmailSettingsSection from "./components/ProfileEmailSettingsSection";
 
 function buildGalleryPermissionMessage(permission) {
   if (permission?.canAskAgain === false) {
@@ -22,7 +23,6 @@ export default function ProfileSettingsScreen({ navigation }) {
   const { colors, typography, spacing, radius } = useAppTheme();
   const { currentUser, updateProfile, uploadAvatar } = useAuth();
   const [displayName, setDisplayName] = useState(currentUser?.displayName ?? "");
-  const [email, setEmail] = useState(currentUser?.email ?? "");
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [error, setError] = useState("");
@@ -30,8 +30,7 @@ export default function ProfileSettingsScreen({ navigation }) {
 
   useEffect(() => {
     setDisplayName(currentUser?.displayName ?? "");
-    setEmail(currentUser?.email ?? "");
-  }, [currentUser?.displayName, currentUser?.email]);
+  }, [currentUser?.displayName]);
 
   const avatarLabel = currentUser?.displayName || currentUser?.email?.split("@")[0] || "Профиль";
   const avatarSource = currentUser?.avatarUrl ? { uri: currentUser.avatarUrl } : undefined;
@@ -80,7 +79,7 @@ export default function ProfileSettingsScreen({ navigation }) {
             <Card style={{ padding: spacing.lg, borderRadius: radius.lg, alignItems: "center" }}>
               <Avatar size={96} label={avatarLabel} source={avatarSource} />
               <Text style={[typography.cardTitle, { color: colors.text, marginTop: spacing.md }]}>{avatarLabel}</Text>
-              
+
               <View style={{ marginTop: spacing.md }}>
                 <ActionButton
                   label={avatarUploading ? "Загружаем..." : currentUser?.avatarUrl ? "Заменить фото" : "Загрузить аватар"}
@@ -100,22 +99,22 @@ export default function ProfileSettingsScreen({ navigation }) {
         </View>
 
         <View>
-          <Text style={[typography.meta, { color: colors.secondaryText }]}>Имя</Text>
+          <SectionHeader title="Имя" />
           <Input value={displayName} onChangeText={setDisplayName} placeholder="Имя" style={{ marginTop: 6 }} />
-          <Text style={[typography.meta, { color: colors.secondaryText, marginTop: spacing.md }]}>Email</Text>
-          <Input value={email} onChangeText={setEmail} placeholder="you@example.com" autoCapitalize="none" style={{ marginTop: 6 }} />
           {error ? <Text style={[typography.body, { color: colors.danger, marginTop: spacing.sm }]}>{error}</Text> : null}
         </View>
+
+        <ProfileEmailSettingsSection />
 
         <ActionButton
           label={saving ? "Сохраняем..." : "Сохранить"}
           icon="checkmark-outline"
-          disabled={saving || avatarUploading || !email.includes("@") || !displayName.trim()}
+          disabled={saving || avatarUploading || !displayName.trim()}
           onPress={async () => {
             setSaving(true);
             setError("");
             try {
-              await updateProfile({ email: email.trim(), displayName: displayName.trim() });
+              await updateProfile({ displayName: displayName.trim() });
               navigation.goBack();
             } catch (requestError) {
               setError(requestError.message || "Не удалось сохранить профиль");

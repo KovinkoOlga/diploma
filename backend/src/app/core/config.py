@@ -14,6 +14,17 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
     refresh_token_expire_days: int = 30
+    email_code_ttl_seconds: int = 600
+    email_code_resend_initial_seconds: int = 60
+    email_code_resend_max_seconds: int = 900
+    email_code_max_attempts: int = 5
+    auth_dev_return_email_code: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_use_tls: bool = True
 
     s3_endpoint_url: str = ""
     s3_access_key: str = ""
@@ -39,11 +50,22 @@ class Settings(BaseSettings):
     sqladmin_password: str = "change-me"
 
     default_user_email: str = "demo@example.com"
-    default_user_password: str = "demo-password"
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [entry.strip() for entry in self.cors_origins.split(",") if entry.strip()]
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() == "production"
+
+    @property
+    def is_local_or_dev(self) -> bool:
+        return not self.is_production
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.smtp_host.strip() and self.smtp_from_email.strip())
 
 
 @lru_cache

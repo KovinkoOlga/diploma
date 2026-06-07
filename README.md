@@ -1,6 +1,6 @@
 # Digital Wardrobe
 
-Мобильное Expo-приложение с вкладкой «Шкаф» и FastAPI backend для хранения вещей, каталогов, подкатегорий, draft-обработки изображений и S3-файлов.
+Мобильное Expo-приложение с вкладкой «Шкаф» и FastAPI backend для хранения вещей, подкатегорий, draft-обработки изображений, S3-файлов и passwordless-авторизации по email-коду.
 
 ## Структура
 
@@ -62,6 +62,7 @@ Compose поднимает:
 - `migrations`, который выполняет `alembic upgrade head` и завершается;
 - `backend` на `http://localhost:8000`;
 - `ml-vision-service` на `http://localhost:8001`.
+- `celery-worker`, который доставляет email-коды и фоновые задачи.
 
 Проверка:
 
@@ -87,12 +88,16 @@ npm start
 EXPO_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Локальный demo-login создается backend автоматически:
+Локальный demo-user создается backend автоматически:
 
 - `demo@example.com`
-- `demo-password`
 
-Клиент больше не входит в demo-аккаунт автоматически. При первом запуске появится экран входа/регистрации. Access token хранится коротко, refresh token хранится в Expo SecureStore и ротируется через `/auth/refresh`.
+Клиент больше не входит в demo-аккаунт автоматически. При первом запуске появится экран входа/регистрации. Вход и регистрация выполняются только по email-коду: API синхронно создает код, hash, cooldown и `nextResendAt`, а доставка письма выполняется отдельной Celery-задачей. Access token хранится коротко, refresh token хранится в Expo SecureStore и ротируется через `/auth/refresh`.
+
+Для local/dev код можно получить двумя способами:
+
+- посмотреть логи `celery-worker` или `backend`, если SMTP не настроен;
+- включить `AUTH_DEV_RETURN_EMAIL_CODE=true`, если нужен возврат `devCode` в API.
 
 После добавления refresh-сессий примените миграции:
 

@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.db.database import engine
 from app.db.metadata import (
     categories,
+    email_verification_codes,
     file_variants,
     files,
     item_drafts,
@@ -68,6 +69,10 @@ class RefreshSession(Base):
     __table__ = refresh_sessions
 
 
+class EmailVerificationCode(Base):
+    __table__ = email_verification_codes
+
+
 class SimpleAdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         form = await request.form()
@@ -86,7 +91,15 @@ class SimpleAdminAuth(AuthenticationBackend):
 
 
 class UserAdmin(ModelView, model=User):
-    column_list = [User.id, User.email, User.display_name, User.created_at]
+    column_list = [
+        User.id,
+        User.email,
+        User.email_verified_at,
+        User.backup_email,
+        User.backup_email_verified_at,
+        User.display_name,
+        User.created_at,
+    ]
 
 
 class CatalogAdmin(ModelView, model=Catalog):
@@ -147,6 +160,24 @@ class RefreshSessionAdmin(ModelView, model=RefreshSession):
     column_list = [RefreshSession.id, RefreshSession.user_id, RefreshSession.created_at, RefreshSession.expires_at, RefreshSession.revoked_at]
 
 
+class EmailVerificationCodeAdmin(ModelView, model=EmailVerificationCode):
+    column_list = [
+        EmailVerificationCode.id,
+        EmailVerificationCode.user_id,
+        EmailVerificationCode.email,
+        EmailVerificationCode.purpose,
+        EmailVerificationCode.created_at,
+        EmailVerificationCode.expires_at,
+        EmailVerificationCode.consumed_at,
+        EmailVerificationCode.attempts_count,
+        EmailVerificationCode.resend_count,
+        EmailVerificationCode.next_resend_at,
+    ]
+    can_create = False
+    can_edit = False
+    can_delete = False
+
+
 def setup_admin(app) -> None:
     admin = Admin(app, engine, authentication_backend=SimpleAdminAuth(secret_key=get_settings().jwt_secret_key))
     for view in (
@@ -161,5 +192,6 @@ def setup_admin(app) -> None:
         ItemDraftAdmin,
         ItemTemplateAdmin,
         RefreshSessionAdmin,
+        EmailVerificationCodeAdmin,
     ):
         admin.add_view(view)

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -37,7 +39,14 @@ async def connection():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
-        await conn.execute(insert(users).values(id="user_1", email="user@example.com", password_hash="hash", display_name="User"))
+        await conn.execute(
+            insert(users).values(
+                id="user_1",
+                email="user@example.com",
+                email_verified_at=datetime.now(timezone.utc),
+                display_name="User",
+            )
+        )
         await conn.execute(
             insert(wardrobe_catalogs).values(id="catalog_main", user_id="user_1", name="Основное", sort_order=10, is_default=True)
         )

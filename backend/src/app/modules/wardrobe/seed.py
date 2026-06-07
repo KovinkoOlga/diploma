@@ -1,7 +1,10 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.db.metadata import users, wardrobe_catalogs
+from app.modules.auth.email_codes import normalize_email
 
 
 DEFAULT_CATALOGS = [
@@ -30,8 +33,9 @@ async def ensure_default_catalogs(connection: AsyncConnection, user_id: str) -> 
     )
 
 
-async def ensure_demo_user(connection: AsyncConnection, email: str, password_hash: str) -> None:
-    row = (await connection.execute(select(users.c.id).where(users.c.email == email))).first()
+async def ensure_demo_user(connection: AsyncConnection, email: str) -> None:
+    normalized_email = normalize_email(email)
+    row = (await connection.execute(select(users.c.id).where(users.c.email == normalized_email))).first()
     if row:
         await ensure_default_catalogs(connection, row[0])
         return
@@ -39,10 +43,9 @@ async def ensure_demo_user(connection: AsyncConnection, email: str, password_has
     await connection.execute(
         insert(users).values(
             id=user_id,
-            email=email,
-            password_hash=password_hash,
+            email=normalized_email,
+            email_verified_at=datetime.now(timezone.utc),
             display_name="Demo",
         )
     )
     await ensure_default_catalogs(connection, user_id)
-

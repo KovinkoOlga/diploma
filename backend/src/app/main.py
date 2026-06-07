@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.core.security import hash_password
 from app.db.database import engine
 from app.modules.admin.routes import setup_admin
 from app.modules.auth.routes import router as auth_router
@@ -21,7 +20,7 @@ from app.modules.wardrobe.seed import ensure_demo_user
 async def lifespan(app: FastAPI):
     settings = get_settings()
     async with engine.begin() as connection:
-        await ensure_demo_user(connection, settings.default_user_email, hash_password(settings.default_user_password))
+        await ensure_demo_user(connection, settings.default_user_email)
     yield
     await engine.dispose()
 

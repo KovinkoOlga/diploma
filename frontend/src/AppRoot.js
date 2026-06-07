@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useAppTheme } from "./theme/ThemeProvider";
 import AuthScreen from "./screens/auth/AuthScreen";
+import BackupEmailOfferScreen from "./screens/auth/BackupEmailOfferScreen";
 import { AuthProvider, useAuth } from "./store/AuthStore";
 import { WardrobeProvider } from "./store/WardrobeStore";
 import RootNavigator from "./navigation/RootNavigator";
@@ -14,7 +15,7 @@ enableScreens();
 
 function InnerApp() {
   const theme = useAppTheme();
-  const { authenticated, bootstrapping } = useAuth();
+  const { authenticated, bootstrapping, pendingBackupOnboarding } = useAuth();
   const barStyle = useMemo(() => (theme.isDark ? "light" : "dark"), [theme.isDark]);
 
   useEffect(() => {
@@ -43,9 +44,13 @@ function InnerApp() {
       <StatusBar style={barStyle} />
       <SafeAreaProvider>
         {authenticated ? (
-          <WardrobeProvider>
-            <RootNavigator />
-          </WardrobeProvider>
+          pendingBackupOnboarding ? (
+            <BackupEmailOfferScreen />
+          ) : (
+            <WardrobeProvider>
+              <RootNavigator />
+            </WardrobeProvider>
+          )
         ) : bootstrapping ? null : (
           <AuthScreen />
         )}

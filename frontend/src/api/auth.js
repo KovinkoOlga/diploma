@@ -1,11 +1,43 @@
-import { apiGet, apiPatch, apiPost, apiPostPublic, getRefreshToken } from "./client";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostPublic, getRefreshToken } from "./client";
 
-export function login(credentials) {
-  return apiPostPublic("/auth/login", credentials);
+export function requestLoginCode(email) {
+  return apiPostPublic("/auth/login/request-code", { email });
 }
 
-export function register(credentials) {
-  return apiPostPublic("/auth/register", credentials);
+export function verifyLoginCode(email, code) {
+  return apiPostPublic("/auth/login/verify-code", { email, code });
+}
+
+export function requestRegisterCode(email) {
+  return apiPostPublic("/auth/register/request-code", { email });
+}
+
+export function verifyRegisterCode(email, code) {
+  return apiPostPublic("/auth/register/verify-code", { email, code });
+}
+
+export function setBackupEmail(backupEmail) {
+  return apiPost("/auth/email/backup", { backupEmail });
+}
+
+export function deleteBackupEmail() {
+  return apiDelete("/auth/email/backup");
+}
+
+export function requestBackupEmailCode() {
+  return apiPost("/auth/email/backup/request-code", {});
+}
+
+export function verifyBackupEmailCode(code) {
+  return apiPost("/auth/email/backup/verify-code", { code });
+}
+
+export function requestPrimaryEmailChange(newEmail) {
+  return apiPost("/auth/email/primary/request-change", { newEmail });
+}
+
+export function verifyPrimaryEmailChange(newEmail, code) {
+  return apiPost("/auth/email/primary/verify-change", { newEmail, code });
 }
 
 export function refresh(refreshToken) {
@@ -37,8 +69,4 @@ export function uploadAvatar(fileAsset) {
     type: fileAsset.mimeType || "image/jpeg",
   });
   return apiPost("/users/me/avatar", formData);
-}
-
-export function changePassword(payload) {
-  return apiPost("/auth/change-password", payload);
 }

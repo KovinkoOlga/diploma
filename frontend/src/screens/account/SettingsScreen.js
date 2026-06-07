@@ -99,7 +99,7 @@ export default function SettingsScreen({ navigation }) {
           <View style={{ marginTop: spacing.sm }}>
             <ListRow
               title="Личные данные"
-              subtitle="Имя, email и фотография профиля"
+              subtitle="Имя, почта и фотография профиля"
               onPress={() => navigation.navigate(Routes.ProfileSettings)}
             />
           </View>

@@ -47,20 +47,6 @@ services:
     ports:
       - "8001:8001"
 
-  # ml-catalog-service:
-  #   build:
-  #     context: ./ml-catalog-service
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     CATALOG_DEVICE: auto
-  #     CATALOG_ENABLE_STUB: "false"
-  #     HF_HOME: /app/.cache/huggingface
-  #   ports:
-  #     - "8002:8002"
-  #   volumes:
-  #     - hf_cache:/app/.cache/huggingface
-
   backend:
     build:
       context: ./backend
@@ -82,8 +68,6 @@ services:
         condition: service_started
       ml-vision-service:
         condition: service_started
-      # ml-catalog-service:
-      #   condition: service_started
 
   celery-worker:
     build:
@@ -112,8 +96,6 @@ services:
         condition: service_started
       ml-vision-service:
         condition: service_started
-      # ml-catalog-service:
-      #   condition: service_started
 
   # pgadmin:
   #   container_name: pgadmin
