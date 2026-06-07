@@ -164,8 +164,13 @@ export function normalizeWardrobeItemDraft(draft, previousItem, colorOptions = [
   const seasonOptions = uniqueStrings(options.seasonOptions);
   const colorIds = uniqueStrings(draft.colorIds ?? base.colorIds);
   const colorDetails = resolveColorDetails(colorIds, colorOptions, draft.colorDetails ?? base.colorDetails);
-  const initialSeasons = uniqueStrings(draft.seasons ?? draft.season ?? base.seasons ?? base.season);
-  const seasons = initialSeasons.length ? initialSeasons : base.id ? initialSeasons : seasonOptions;
+  const draftHasExplicitSeasons = Boolean(
+    draft && (Object.prototype.hasOwnProperty.call(draft, "seasons") || Object.prototype.hasOwnProperty.call(draft, "season"))
+  );
+  const initialSeasons = uniqueStrings(
+    draftHasExplicitSeasons ? draft.seasons ?? draft.season : draft.seasons ?? draft.season ?? base.seasons ?? base.season
+  );
+  const seasons = initialSeasons.length ? initialSeasons : base.id || draftHasExplicitSeasons ? initialSeasons : seasonOptions;
   const styles = uniqueStyleNames(draft.styles ?? draft.tags ?? base.styles ?? base.tags);
   const status = draft.status ?? base.status ?? options.statusOptions?.[0]?.id ?? "active";
 

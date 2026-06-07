@@ -767,7 +767,6 @@ async def delete_outfit(
                     item_drafts.c.editor_file_id == cover_file_id,
                     item_drafts.c.processed_file_id == cover_file_id,
                     item_drafts.c.mask_file_id == cover_file_id,
-                    item_drafts.c.catalog_file_id == cover_file_id,
                 )
             )
         )

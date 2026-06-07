@@ -18,7 +18,6 @@ from app.modules.wardrobe.schemas import (
     DictionaryNamePatchPayload,
     DictionaryStyleResponse,
     DictionarySubcategoryResponse,
-    DraftCreatePayload,
     DraftResponse,
     ItemPatch,
     ItemPayload,
@@ -39,26 +38,6 @@ async def bootstrap(
     connection: AsyncConnection = Depends(get_connection),
 ) -> BootstrapResponse:
     return await service.get_bootstrap(connection, _user_id(current_user))
-
-
-@router.get("/categories")
-async def categories(
-    current_user: dict = Depends(get_current_user),
-    connection: AsyncConnection = Depends(get_connection),
-):
-    return (await service.get_bootstrap(connection, _user_id(current_user))).categories
-
-
-@router.get("/subcategories")
-async def subcategory_list(
-    categoryId: str | None = None,
-    current_user: dict = Depends(get_current_user),
-    connection: AsyncConnection = Depends(get_connection),
-):
-    categories = (await service.get_bootstrap(connection, _user_id(current_user))).categories
-    if categoryId:
-        return next((category.subcategories for category in categories if category.id == categoryId), [])
-    return {category.id: category.subcategories for category in categories}
 
 
 @router.post("/catalogs", response_model=CatalogResponse)
@@ -296,43 +275,6 @@ async def bulk_delete(
         await service.delete_item(connection, _user_id(current_user), item_id)
 
 
-@router.post("/items/{item_id}/archive", response_model=ItemResponse)
-async def archive_item(
-    item_id: str,
-    current_user: dict = Depends(get_current_user),
-    connection: AsyncConnection = Depends(get_connection),
-) -> ItemResponse:
-    try:
-        return await service.patch_item(connection, _user_id(current_user), item_id, ItemPatch(status="archived"))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-
-
-@router.post("/items/{item_id}/restore", response_model=ItemResponse)
-async def restore_item(
-    item_id: str,
-    catalogId: str | None = None,
-    current_user: dict = Depends(get_current_user),
-    connection: AsyncConnection = Depends(get_connection),
-) -> ItemResponse:
-    try:
-        return await service.patch_item(connection, _user_id(current_user), item_id, ItemPatch(status="active", catalogId=catalogId))
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-
-
-@router.post("/drafts", response_model=DraftResponse)
-async def create_draft(
-    payload: DraftCreatePayload,
-    current_user: dict = Depends(get_current_user),
-    connection: AsyncConnection = Depends(get_connection),
-) -> DraftResponse:
-    try:
-        return await service.create_draft(connection, _user_id(current_user), payload.sourceType, payload.catalogId, payload.templateId)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-
-
 @router.post("/drafts/upload", response_model=DraftResponse)
 async def upload_draft(
     sourceType: str = Form("photo"),
@@ -350,21 +292,9 @@ async def upload_draft(
             content,
             file.filename or "wardrobe-image",
             file.content_type or "application/octet-stream",
-        )
+    )
     try:
         return await service.create_draft(connection, _user_id(current_user), sourceType, catalogId, file_id=file_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-
-
-@router.post("/drafts/from-template", response_model=DraftResponse)
-async def draft_from_template(
-    payload: DraftCreatePayload,
-    current_user: dict = Depends(get_current_user),
-    connection: AsyncConnection = Depends(get_connection),
-) -> DraftResponse:
-    try:
-        return await service.create_draft(connection, _user_id(current_user), "catalog", payload.catalogId, payload.templateId)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
@@ -409,20 +339,6 @@ async def get_draft(
         return await service.get_draft(connection, _user_id(current_user), draft_id)
     except LookupError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
-
-
-@router.post("/drafts/{draft_id}/enhance", response_model=DraftResponse)
-async def enhance_draft(
-    draft_id: str,
-    current_user: dict = Depends(get_current_user),
-    connection: AsyncConnection = Depends(get_connection),
-) -> DraftResponse:
-    try:
-        return await service.enhance_draft(connection, _user_id(current_user), draft_id)
-    except LookupError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.post("/drafts/{draft_id}/confirm", response_model=ItemResponse)

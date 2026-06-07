@@ -105,7 +105,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
   );
 
   const [saving, setSaving] = useState(false);
-  const [enhancing, setEnhancing] = useState(false);
+  const [editMaskLoading, setEditMaskLoading] = useState(false);
   const [draftState, setDraftState] = useState(null);
   const [draft, setDraft] = useState(() =>
     normalizeDraft(
@@ -134,18 +134,16 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
       setDraft((current) => {
         const normalized = normalizeIncomingDraft(next.draft);
         const mergedDraft = preserveEditedDraftFields(current, previousServerDraft, normalized);
-        const optionIds = [next.images?.cutout?.fileId, next.images?.catalog?.fileId].filter(Boolean);
+        const optionIds = [next.images?.cutout?.fileId].filter(Boolean);
         const currentSelectionIsValid =
           mergedDraft.primaryImageFileId && optionIds.includes(mergedDraft.primaryImageFileId);
         const selectedPrimaryImageId =
           currentSelectionIsValid
             ? mergedDraft.primaryImageFileId
-            : normalized.primaryImageFileId ?? next.images?.cutout?.fileId ?? next.images?.catalog?.fileId ?? null;
+            : normalized.primaryImageFileId ?? next.images?.cutout?.fileId ?? null;
         let selectedImage = normalized.image;
 
-        if (selectedPrimaryImageId && next.images?.catalog?.fileId === selectedPrimaryImageId) {
-          selectedImage = imageSourceForOption(next.images.catalog) ?? selectedImage;
-        } else if (selectedPrimaryImageId && next.images?.cutout?.fileId === selectedPrimaryImageId) {
+        if (selectedPrimaryImageId && next.images?.cutout?.fileId === selectedPrimaryImageId) {
           selectedImage = imageSourceForOption(next.images.cutout) ?? selectedImage;
         } else if (currentSelectionIsValid) {
           selectedImage = current.image ?? selectedImage;
@@ -190,6 +188,47 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     },
     []
   );
+
+  const handleEditMask = useCallback(async () => {
+    if (
+      !draftId ||
+      !draftState?.images?.cutout ||
+      !(draftState?.editorImageUrl || draftState?.originalImagePreviewDataUrl || draftState?.originalImageUrl) ||
+      !draftState?.maskBitmap?.dataBase64
+    ) {
+      return;
+    }
+
+    setEditMaskLoading(true);
+    try {
+      const latestDraftState = await actions.fetchDraft(draftId);
+      syncDraftState(latestDraftState);
+      navigation.push(Routes.WardrobeMaskEditor, {
+        draftId,
+        ...(batchId ? { batchId } : {}),
+        ...(currentEntryId ? { entryId: currentEntryId } : {}),
+        returnRouteKey: route.key,
+        editorOpenedAt: Date.now(),
+        cutoutImageUrl: latestDraftState.images?.cutout?.imageUrl ?? draftState.images.cutout.imageUrl,
+        maskImageUrl: latestDraftState.maskImageUrl ?? draftState.maskImageUrl,
+        maskBitmap: latestDraftState.maskBitmap ?? draftState.maskBitmap,
+        editorImageUrl: latestDraftState.editorImageUrl ?? draftState.editorImageUrl,
+        originalImagePreviewDataUrl: latestDraftState.originalImagePreviewDataUrl ?? draftState.originalImagePreviewDataUrl,
+        originalImageUrl: latestDraftState.originalImageUrl ?? draftState.originalImageUrl,
+      });
+    } finally {
+      setEditMaskLoading(false);
+    }
+  }, [
+    actions,
+    batchId,
+    currentEntryId,
+    draftId,
+    draftState,
+    navigation,
+    route.key,
+    syncDraftState,
+  ]);
 
   useEffect(() => {
     let alive = true;
@@ -320,33 +359,11 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     openBatchExitPrompt();
   });
 
-  const pollCatalogStatus = async () => {
-    if (!draftId) return;
-    try {
-      const next = await actions.fetchDraft(draftId);
-      syncDraftState(next);
-      if (next.catalogProcessingStatus === "queued" || next.catalogProcessingStatus === "processing") {
-        setTimeout(() => {
-          pollCatalogStatus();
-        }, 900);
-        return;
-      }
-      setEnhancing(false);
-    } catch (error) {
-      setDraftState((current) =>
-        current
-          ? { ...current, catalogErrorMessage: error?.message || "Не удалось получить статус обработки" }
-          : { catalogErrorMessage: error?.message || "Не удалось получить статус обработки" }
-      );
-      setEnhancing(false);
-    }
-  };
-
   const saveDraft = async () => {
     const preparedDraft = finalizeDraftStyleInput(draft, styleOptions);
     setDraft((current) => normalizeDraft(preparedDraft, current));
     const validationMessage = getWardrobeDraftValidationMessage(preparedDraft, {
-      requirePrimaryImage: Boolean(draftId && preparedDraft.sourceType !== "catalog"),
+      requirePrimaryImage: Boolean(draftId),
     });
     if (validationMessage) {
       throw new Error(validationMessage);
@@ -418,70 +435,8 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
           seasonOptions={seasonOptions}
           styleOptions={styleOptions}
           statusOptions={statusOptions}
-          draftImages={draftState?.images}
-          catalogProcessingStatus={draftState?.catalogProcessingStatus}
-          catalogErrorMessage={draftState?.catalogErrorMessage}
-          onSelectImageOption={(imageOption) =>
-            updateDraft((current) => ({
-              ...current,
-              primaryImageFileId: imageOption.fileId,
-              image: imageSourceForOption(imageOption) ?? current.image,
-            }))
-          }
-          onEditMask={
-            draftId &&
-            draft.sourceType !== "catalog" &&
-            draftState?.images?.cutout &&
-            (draftState?.editorImageUrl || draftState?.originalImagePreviewDataUrl || draftState?.originalImageUrl) &&
-            draftState?.maskBitmap?.dataBase64
-              ? () =>
-                  actions.fetchDraft(draftId).then((latestDraftState) => {
-                    syncDraftState(latestDraftState);
-                    navigation.push(Routes.WardrobeMaskEditor, {
-                      draftId,
-                      ...(batchId ? { batchId } : {}),
-                      ...(currentEntryId ? { entryId: currentEntryId } : {}),
-                      returnRouteKey: route.key,
-                      editorOpenedAt: Date.now(),
-                      cutoutImageUrl: latestDraftState.images?.cutout?.imageUrl ?? draftState.images.cutout.imageUrl,
-                      maskImageUrl: latestDraftState.maskImageUrl ?? draftState.maskImageUrl,
-                      maskBitmap: latestDraftState.maskBitmap ?? draftState.maskBitmap,
-                      editorImageUrl: latestDraftState.editorImageUrl ?? draftState.editorImageUrl,
-                      originalImagePreviewDataUrl:
-                        latestDraftState.originalImagePreviewDataUrl ?? draftState.originalImagePreviewDataUrl,
-                      originalImageUrl: latestDraftState.originalImageUrl ?? draftState.originalImageUrl,
-                    });
-                  })
-              : undefined
-          }
-          onEnhancePhoto={
-            draftId && draft.sourceType !== "catalog"
-              ? async () => {
-                  let keepPolling = false;
-                  setEnhancing(true);
-                  try {
-                    const next = await actions.enhanceDraft(draftId);
-                    syncDraftState(next);
-                    if (next.catalogProcessingStatus === "queued" || next.catalogProcessingStatus === "processing") {
-                      keepPolling = true;
-                      await pollCatalogStatus();
-                      return;
-                    }
-                  } catch (error) {
-                    setDraftState((current) =>
-                      current
-                        ? { ...current, catalogErrorMessage: error?.message || "Не удалось улучшить фото" }
-                        : { catalogErrorMessage: error?.message || "Не удалось улучшить фото" }
-                    );
-                  } finally {
-                    if (!keepPolling) {
-                      setEnhancing(false);
-                    }
-                  }
-                }
-              : undefined
-          }
-          enhanceBusy={enhancing}
+          onEditMask={handleEditMask}
+          editMaskLoading={editMaskLoading}
           onTitleFocus={() => setTitleFocused(true)}
           onTitleBlur={() => {
             setTitleFocused(false);

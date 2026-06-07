@@ -202,7 +202,7 @@ function ThreeActionEmpty({ navigation, catalogId }) {
       <EmptyState
         icon="shirt-outline"
         title="Ваш цифровой шкаф пока пуст"
-        subtitle="Добавьте первую вещь: сфотографируйте её, загрузите из галереи или выберите из базового каталога."
+        subtitle="Добавьте первую вещь: сфотографируйте её или загрузите из галереи."
       />
       <View style={{ gap: spacing.sm }}>
         <ActionButton
@@ -216,13 +216,6 @@ function ThreeActionEmpty({ navigation, catalogId }) {
           icon="image-outline"
           variant="secondary"
           onPress={() => openWardrobePhotoFlow({ navigation, mode: WARDROBE_PHOTO_MODES.gallery, catalogId })}
-          fullWidth
-        />
-        <ActionButton
-          label="Выбрать из каталога"
-          icon="grid-outline"
-          variant="secondary"
-          onPress={() => navigation.navigate(Routes.WardrobeAddFromCatalog, catalogId ? { catalogId } : undefined)}
           fullWidth
         />
       </View>

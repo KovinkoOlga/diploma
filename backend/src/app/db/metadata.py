@@ -19,6 +19,7 @@ from sqlalchemy import (
 
 
 metadata = MetaData()
+legacy_metadata = MetaData()
 
 users = Table(
     "users",
@@ -304,7 +305,7 @@ outfit_collection_outfits = Table(
 
 wardrobe_item_templates = Table(
     "wardrobe_item_templates",
-    metadata,
+    legacy_metadata,
     Column("id", String(48), primary_key=True),
     Column("name", String(160), nullable=False),
     Column("category_id", String(48), ForeignKey("categories.id"), nullable=False),
@@ -328,11 +329,8 @@ item_drafts = Table(
     Column("editor_file_id", String(48), ForeignKey("files.id"), nullable=True),
     Column("processed_file_id", String(48), ForeignKey("files.id"), nullable=True),
     Column("mask_file_id", String(48), ForeignKey("files.id"), nullable=True),
-    Column("catalog_file_id", String(48), ForeignKey("files.id"), nullable=True),
-    Column("catalog_processing_status", String(60), nullable=False, default="not_requested"),
     Column("suggested_payload_json", JSON, nullable=True),
     Column("error_message", Text, nullable=True),
-    Column("catalog_error_message", Text, nullable=True),
     Column("ml_result_json", JSON, nullable=True),
     Column("started_at", DateTime(timezone=True), nullable=True),
     Column("finished_at", DateTime(timezone=True), nullable=True),

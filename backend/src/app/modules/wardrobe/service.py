@@ -1,5 +1,4 @@
 import base64
-import base64
 import json
 from datetime import datetime, timezone
 from io import BytesIO
@@ -26,7 +25,6 @@ from app.db.metadata import (
     styles,
     subcategories,
     wardrobe_catalogs,
-    wardrobe_item_templates,
     wardrobe_items,
 )
 from app.modules.files.service import (
@@ -56,7 +54,6 @@ from app.modules.wardrobe.schemas import (
     ItemPayload,
     ItemResponse,
     StatusResponse,
-    TemplateResponse,
 )
 from app.modules.wardrobe.taxonomy import SYSTEM_SUBCATEGORIES
 
@@ -80,11 +77,6 @@ INTERNAL_PROGRESS_ALLOWED_STATUSES = frozenset(
         PRIMARY_FAILED_STATUS,
     }
 )
-CATALOG_NOT_REQUESTED_STATUS = "not_requested"
-CATALOG_QUEUED_STATUS = "queued"
-CATALOG_PROCESSING_STATUS = "processing"
-CATALOG_READY_STATUS = "ready"
-CATALOG_FAILED_STATUS = "failed"
 VALID_MASK_ROTATIONS = {0, 90, 180, 270}
 STYLE_SEPARATOR_PATTERN = r"\s*[_/\\-]+\s*"
 
@@ -232,7 +224,6 @@ def _merge_item_attributes(
     preserve_existing_ml: bool = True,
 ) -> dict[str, Any]:
     attributes = dict(current_attributes or {})
-    attributes.pop("material", None)
 
     existing_ml = attributes.get("ml") if isinstance(attributes.get("ml"), dict) else {}
     ml_payload = dict(existing_ml) if preserve_existing_ml else {}
@@ -470,10 +461,6 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
             .order_by(styles.c.is_system.desc(), styles.c.name)
         )
     ).mappings().all()
-    template_rows = (
-        await connection.execute(select(wardrobe_item_templates).order_by(wardrobe_item_templates.c.sort_order))
-    ).mappings().all()
-
     return BootstrapResponse(
         catalogs=[_catalog_response(dict(row)) for row in catalog_rows],
         categories=[
@@ -498,19 +485,6 @@ async def get_bootstrap(connection: AsyncConnection, user_id: str) -> BootstrapR
         seasons=list(season_rows),
         styles=_ordered_unique_style_names([dict(row) for row in style_rows]),
         statuses=[StatusResponse(id=row["code"], title=row["name"]) for row in status_rows],
-        templates=[
-            TemplateResponse(
-                id=row["id"],
-                title=row["name"],
-                categoryId=row["category_id"],
-                subcategory=row["subcategory_name"],
-                brand=row["brand"] or "",
-                colorIds=row["color_ids_json"] or [],
-                seasons=row["seasons_json"] or [],
-                styles=row["styles_json"] or [],
-            )
-            for row in template_rows
-        ],
     )
 
 
@@ -619,7 +593,7 @@ async def delete_subcategory(connection: AsyncConnection, user_id: str, subcateg
             )
         )
     ).scalar_one()
-    if False and usage_count:
+    if usage_count:
         raise ValueError("Подкатегория используется в вещах")
 
     await connection.execute(
@@ -1170,26 +1144,20 @@ async def delete_item(connection: AsyncConnection, user_id: str, item_id: str) -
     await connection.execute(delete(wardrobe_items).where(wardrobe_items.c.id == item_id, wardrobe_items.c.user_id == user_id))
 
 
-async def _default_draft_payload(
-    connection: AsyncConnection,
-    template: dict,
-    source_type: str,
-    catalog_id: str,
-    file_id: str | None = None,
-) -> dict:
+def _default_draft_payload(source_type: str, catalog_id: str, file_id: str | None = None) -> dict:
     return {
         "title": "",
         "catalogId": catalog_id,
-        "categoryId": template["category_id"],
-        "subcategory": template["subcategory_name"],
-        "colorIds": template["color_ids_json"] or [],
-        "brand": template["brand"] or "",
-        "seasons": await _season_names(connection),
+        "categoryId": "",
+        "subcategory": "",
+        "colorIds": [],
+        "brand": "",
+        "seasons": [],
         "styles": [],
         "status": "active",
         "notes": "",
         "sourceType": source_type,
-        "recognitionLabel": "Template defaults" if source_type == "catalog" else "Image processing in progress",
+        "recognitionLabel": "Image processing in progress",
         "primaryImageFileId": file_id,
         "categoryPrediction": None,
         "subcategorySuggestions": [],
@@ -1339,8 +1307,6 @@ async def _ensure_square_draft_assets(connection: AsyncConnection, row: dict) ->
 async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftResponse:
     row = await _ensure_square_draft_assets(connection, row)
     payload = dict(row.get("suggested_payload_json") or {})
-    payload.pop("size", None)
-    payload.pop("material", None)
     editor_url = await get_file_url(connection, row.get("editor_file_id"), "card")
     original_url = await get_file_url(connection, row.get("original_file_id"), "original")
     if original_url is None:
@@ -1348,7 +1314,6 @@ async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftRespo
     if row.get("source_type") in {"photo", "gallery"} and editor_url:
         original_url = editor_url
     cutout_url = await get_file_url(connection, row.get("processed_file_id"), "card")
-    catalog_url = await get_file_url(connection, row.get("catalog_file_id"), "card")
     mask_url = await get_file_url(connection, row.get("mask_file_id"), "mask")
     mask_bitmap = await _mask_bitmap_payload(connection, row.get("mask_file_id"))
     original_preview_data_url = await _editor_preview_data_url(
@@ -1357,12 +1322,10 @@ async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftRespo
     )
 
     if row["processing_status"] == PRIMARY_READY_STATUS:
-        primary_file_id = payload.get("primaryImageFileId") or row.get("processed_file_id") or row.get("catalog_file_id") or row.get("original_file_id")
+        primary_file_id = payload.get("primaryImageFileId") or row.get("processed_file_id") or row.get("original_file_id")
         if row.get("source_type") in {"photo", "gallery"} and primary_file_id == row.get("original_file_id") and row.get("processed_file_id"):
             primary_file_id = row["processed_file_id"]
-        if primary_file_id == row.get("catalog_file_id") and catalog_url:
-            payload["image"] = catalog_url
-        elif primary_file_id == row.get("processed_file_id") and cutout_url:
+        if primary_file_id == row.get("processed_file_id") and cutout_url:
             payload["image"] = cutout_url
         else:
             payload["image"] = await get_file_url(connection, primary_file_id, "card")
@@ -1370,17 +1333,14 @@ async def _serialize_draft(connection: AsyncConnection, row: dict) -> DraftRespo
 
     images = DraftImagesResponse(
         cutout=DraftImageAsset(fileId=row["processed_file_id"], imageUrl=cutout_url) if row.get("processed_file_id") else None,
-        catalog=DraftImageAsset(fileId=row["catalog_file_id"], imageUrl=catalog_url) if row.get("catalog_file_id") else None,
     )
     return DraftResponse(
         id=row["id"],
         sourceType=row["source_type"],
         processingStatus=row["processing_status"],
-        catalogProcessingStatus=row.get("catalog_processing_status") or CATALOG_NOT_REQUESTED_STATUS,
         ready=row["processing_status"] == PRIMARY_READY_STATUS,
         draft=payload if row["processing_status"] == PRIMARY_READY_STATUS else None,
         errorMessage=row.get("error_message"),
-        catalogErrorMessage=row.get("catalog_error_message"),
         images=images,
         editorImageUrl=editor_url,
         originalImageUrl=original_url,
@@ -1518,100 +1478,57 @@ async def create_draft(
     user_id: str,
     source_type: str,
     catalog_id: str,
-    template_id: str | None = None,
     file_id: str | None = None,
 ) -> DraftResponse:
-    fallback_template_id = template_id or ("template_5" if source_type == "gallery" else "template_1")
-    template = (
-        await connection.execute(select(wardrobe_item_templates).where(wardrobe_item_templates.c.id == fallback_template_id))
-    ).mappings().first()
-    if template is None:
-        template = (
-            await connection.execute(select(wardrobe_item_templates).order_by(wardrobe_item_templates.c.sort_order))
-        ).mappings().first()
-    if source_type in {"photo", "gallery"} and file_id is None:
-        raise ValueError("Original image is required for photo drafts")
+    if source_type not in {"photo", "gallery"}:
+        raise ValueError("Unsupported draft source type")
+    if file_id is None:
+        raise ValueError("Original image is required for uploaded drafts")
 
-    draft_payload = await _default_draft_payload(connection, dict(template), source_type, catalog_id, file_id)
-    is_catalog_source = source_type == "catalog"
+    draft_payload = _default_draft_payload(source_type, catalog_id, file_id)
     draft_id = new_id("draft")
     await connection.execute(
         insert(item_drafts).values(
             id=draft_id,
             user_id=user_id,
             source_type=source_type,
-            processing_status=PRIMARY_READY_STATUS if is_catalog_source else PRIMARY_QUEUED_STATUS,
+            processing_status=PRIMARY_QUEUED_STATUS,
             catalog_id=catalog_id,
             original_file_id=file_id,
             editor_file_id=None,
-            processed_file_id=file_id if is_catalog_source else None,
-            catalog_processing_status=CATALOG_NOT_REQUESTED_STATUS,
+            processed_file_id=None,
             suggested_payload_json=draft_payload,
-            started_at=None if not is_catalog_source else datetime.now(timezone.utc),
-            finished_at=datetime.now(timezone.utc) if is_catalog_source else None,
+            started_at=None,
+            finished_at=None,
         )
     )
-    if not is_catalog_source:
-        from app.tasks.wardrobe_tasks import trigger_prepare_item_photo_task
+    from app.tasks.wardrobe_tasks import trigger_prepare_item_photo_task
 
-        await connection.commit()
-        try:
-            await trigger_prepare_item_photo_task(draft_id)
-        except Exception as exc:
-            await connection.execute(
-                update(item_drafts)
-                .where(item_drafts.c.id == draft_id)
-                .values(
-                    processing_status=PRIMARY_FAILED_STATUS,
-                    error_message=str(exc),
-                    updated_at=datetime.now(timezone.utc),
-                    finished_at=datetime.now(timezone.utc),
-                )
+    external_transaction = getattr(connection.sync_connection, "_trans_context_manager", None) is not None
+    if external_transaction:
+        row = await _load_draft_row(connection, user_id, draft_id)
+        return await _serialize_draft(connection, row)
+
+    await connection.commit()
+    try:
+        await trigger_prepare_item_photo_task(draft_id)
+    except Exception as exc:
+        await connection.execute(
+            update(item_drafts)
+            .where(item_drafts.c.id == draft_id)
+            .values(
+                processing_status=PRIMARY_FAILED_STATUS,
+                error_message=str(exc),
+                updated_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(timezone.utc),
             )
+        )
     return await get_draft(connection, user_id, draft_id)
 
 
 async def get_draft(connection: AsyncConnection, user_id: str, draft_id: str) -> DraftResponse:
     row = await _load_draft_row(connection, user_id, draft_id)
     return await _serialize_draft(connection, row)
-
-
-async def enhance_draft(connection: AsyncConnection, user_id: str, draft_id: str) -> DraftResponse:
-    row = await _load_draft_row(connection, user_id, draft_id)
-    if row["processing_status"] != PRIMARY_READY_STATUS:
-        raise ValueError("Draft is not ready for catalog enhancement")
-    row = await _ensure_square_draft_assets(connection, row)
-    if not row.get("processed_file_id") or not row.get("mask_file_id") or not (row.get("editor_file_id") or row.get("original_file_id")):
-        raise ValueError("Draft does not have enough ML artifacts for catalog enhancement")
-    catalog_status = row.get("catalog_processing_status") or CATALOG_NOT_REQUESTED_STATUS
-    if catalog_status in {CATALOG_QUEUED_STATUS, CATALOG_PROCESSING_STATUS, CATALOG_READY_STATUS}:
-        return await _serialize_draft(connection, row)
-
-    await connection.execute(
-        update(item_drafts)
-        .where(item_drafts.c.id == draft_id)
-        .values(
-            catalog_processing_status=CATALOG_QUEUED_STATUS,
-            catalog_error_message=None,
-            updated_at=datetime.now(timezone.utc),
-        )
-    )
-    from app.tasks.wardrobe_tasks import trigger_enhance_catalog_photo_task
-
-    await connection.commit()
-    try:
-        await trigger_enhance_catalog_photo_task(draft_id)
-    except Exception as exc:
-        await connection.execute(
-            update(item_drafts)
-            .where(item_drafts.c.id == draft_id)
-            .values(
-                catalog_processing_status=CATALOG_FAILED_STATUS,
-                catalog_error_message=str(exc),
-                updated_at=datetime.now(timezone.utc),
-            )
-        )
-    return await get_draft(connection, user_id, draft_id)
 
 
 async def edit_draft_mask(
@@ -1666,9 +1583,6 @@ async def edit_draft_mask(
             editor_file_id=saved_file_ids["editor_file_id"],
             processed_file_id=saved_file_ids["processed_file_id"],
             mask_file_id=saved_file_ids["mask_file_id"],
-            catalog_file_id=None,
-            catalog_processing_status=CATALOG_NOT_REQUESTED_STATUS,
-            catalog_error_message=None,
             suggested_payload_json=payload,
             updated_at=datetime.now(timezone.utc),
         )
@@ -1734,7 +1648,7 @@ async def _validate_confirm_draft_payload(
     if row.get("source_type") in {"photo", "gallery"} and primary_image_file_id is None:
         raise ValueError("Выберите изображение вещи")
 
-    allowed_primary_ids = {row.get("processed_file_id"), row.get("catalog_file_id")}
+    allowed_primary_ids = {file_id for file_id in [row.get("processed_file_id")] if file_id}
     if primary_image_file_id and primary_image_file_id not in allowed_primary_ids:
         raise ValueError("Выбранное изображение устарело. Выберите изображение вещи заново")
 

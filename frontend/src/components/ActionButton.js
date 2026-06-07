@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../theme/ThemeProvider";
 
@@ -18,6 +18,7 @@ export default function ActionButton({
   compact = false,
   fullWidth = false,
   disabled = false,
+  loading = false,
   style,
 }) {
   const { colors, typography, radius, spacing } = useAppTheme();
@@ -47,12 +48,12 @@ export default function ActionButton({
 
   return (
     <Pressable
-      disabled={disabled}
+      disabled={disabled || loading}
       onPress={onPress}
       style={({ pressed }) => [
         styles.pressable,
         {
-          opacity: disabled ? 0.4 : pressed ? 0.75 : 1,
+          opacity: disabled || loading ? 0.4 : pressed ? 0.75 : 1,
           alignSelf: fullWidth ? "stretch" : "flex-start",
         },
         style,
@@ -70,14 +71,18 @@ export default function ActionButton({
           },
         ]}
       >
-        {icon ? <Ionicons name={icon} size={compact ? 15 : 17} color={palette.textColor} /> : null}
+        {loading ? (
+          <ActivityIndicator size="small" color={palette.textColor} />
+        ) : icon ? (
+          <Ionicons name={icon} size={compact ? 15 : 17} color={palette.textColor} />
+        ) : null}
         {label ? (
           <Text
             style={[
               typography.button,
               {
                 color: palette.textColor,
-                marginLeft: icon ? 8 : 0,
+                marginLeft: loading || icon ? 8 : 0,
               },
             ]}
           >

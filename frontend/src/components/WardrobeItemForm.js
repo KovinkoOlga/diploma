@@ -35,13 +35,8 @@ export default function WardrobeItemForm({
   seasonOptions,
   styleOptions,
   statusOptions,
-  draftImages,
-  catalogProcessingStatus,
-  catalogErrorMessage,
-  onSelectImageOption,
   onEditMask,
-  onEnhancePhoto,
-  enhanceBusy = false,
+  editMaskLoading = false,
   onTitleFocus,
   onTitleBlur,
 }) {
@@ -97,8 +92,6 @@ export default function WardrobeItemForm({
     onChange({ ...draft, [field]: value });
   };
 
-  const catalogBusy = catalogProcessingStatus === "processing" || catalogProcessingStatus === "queued";
-
   return (
     <View>
       <View
@@ -118,51 +111,16 @@ export default function WardrobeItemForm({
             marginTop: spacing.md,
           }}
         />
-        {draftImages?.cutout || draftImages?.catalog ? (
+        {onEditMask ? (
           <View style={{ marginTop: spacing.md }}>
-            <Text style={[typography.meta, { color: colors.secondaryText }]}>Вариант изображения</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-              {draftImages?.cutout ? (
-                <Chip
-                  label="Обрезанный фон"
-                  selected={draft.primaryImageFileId === draftImages.cutout.fileId}
-                  onPress={() => onSelectImageOption?.(draftImages.cutout)}
-                />
-              ) : null}
-              {draftImages?.catalog ? (
-                <Chip
-                  label="Каталожный вид"
-                  selected={draft.primaryImageFileId === draftImages.catalog.fileId}
-                  onPress={() => onSelectImageOption?.(draftImages.catalog)}
-                />
-              ) : null}
-            </View>
-            {onEditMask ? (
-              <View style={{ marginTop: spacing.sm }}>
-                <ActionButton
-                  label="Редактировать маску"
-                  icon="create-outline"
-                  variant="secondary"
-                  onPress={onEditMask}
-                  fullWidth
-                />
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-        {onEnhancePhoto ? (
-          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
             <ActionButton
-              label={catalogBusy || enhanceBusy ? "Улучшаем..." : "Улучшить фото"}
-              icon="sparkles-outline"
-              onPress={onEnhancePhoto}
-              disabled={catalogBusy || enhanceBusy}
+              label="Редактировать маску"
+              icon="create-outline"
+              variant="secondary"
+              loading={editMaskLoading}
+              onPress={onEditMask}
               fullWidth
             />
-            {catalogBusy ? (
-              <Text style={[typography.caption, { color: colors.secondaryText }]}>Генерируем каталожный вариант.</Text>
-            ) : null}
-            {catalogErrorMessage ? <Text style={[typography.caption, { color: colors.danger }]}>{catalogErrorMessage}</Text> : null}
           </View>
         ) : null}
       </View>

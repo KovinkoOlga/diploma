@@ -94,10 +94,6 @@ export async function deleteBrand(brandId) {
   return apiDelete(`/wardrobe/brands/${brandId}`);
 }
 
-export async function createDraft(payload) {
-  return apiPost("/wardrobe/drafts", payload);
-}
-
 export async function uploadDraftImage({ sourceType, catalogId, asset }) {
   const formData = new FormData();
   const fallbackName = asset?.uri?.split("/").pop() || "wardrobe-image.jpg";
@@ -111,20 +107,8 @@ export async function uploadDraftImage({ sourceType, catalogId, asset }) {
   return apiPost("/wardrobe/drafts/upload", formData);
 }
 
-export async function createDraftFromTemplate(templateId, catalogId) {
-  return apiPost("/wardrobe/drafts/from-template", { sourceType: "catalog", templateId, catalogId });
-}
-
 export async function fetchDraft(draftId) {
   const draft = await apiGet(`/wardrobe/drafts/${draftId}`);
-  if (draft?.draft) {
-    draft.draft = normalizeRemoteImage(draft.draft);
-  }
-  return draft;
-}
-
-export async function enhanceDraft(draftId) {
-  const draft = await apiPost(`/wardrobe/drafts/${draftId}/enhance`);
   if (draft?.draft) {
     draft.draft = normalizeRemoteImage(draft.draft);
   }

@@ -34,7 +34,6 @@ class Settings(BaseSettings):
     s3_presigned_expire_seconds: int = 3600
     s3_force_path_style: bool = True
     ml_vision_service_url: str = "http://ml-vision-service:8001"
-    ml_catalog_service_url: str = "http://ml-catalog-service:8002"
     ml_request_timeout_seconds: int = 300
     backend_internal_url: str = "http://backend:8000"
     internal_service_token: str = "change-me-in-local-dev"

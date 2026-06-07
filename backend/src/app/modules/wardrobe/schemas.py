@@ -62,18 +62,6 @@ class ColorResponse(BaseModel):
     sortOrder: int
 
 
-class TemplateResponse(BaseModel):
-    id: str
-    title: str
-    categoryId: str
-    subcategory: str
-    colorIds: list[str] = Field(default_factory=list)
-    styles: list[str] = Field(default_factory=list)
-    seasons: list[str] = Field(default_factory=list)
-    brand: str = ""
-    image: str | None = None
-
-
 class BootstrapResponse(BaseModel):
     catalogs: list[CatalogResponse]
     categories: list[CategoryResponse]
@@ -81,7 +69,6 @@ class BootstrapResponse(BaseModel):
     seasons: list[str]
     styles: list[str]
     statuses: list[StatusResponse]
-    templates: list[TemplateResponse]
 
 
 class ItemPayload(BaseModel):
@@ -160,12 +147,6 @@ class DictionaryNamePatchPayload(BaseModel):
     name: str = Field(min_length=1)
 
 
-class DraftCreatePayload(BaseModel):
-    sourceType: Literal["photo", "gallery", "catalog"] = "photo"
-    catalogId: str
-    templateId: str | None = None
-
-
 class DraftImageAsset(BaseModel):
     fileId: str
     imageUrl: str | None = None
@@ -173,18 +154,15 @@ class DraftImageAsset(BaseModel):
 
 class DraftImagesResponse(BaseModel):
     cutout: DraftImageAsset | None = None
-    catalog: DraftImageAsset | None = None
 
 
 class DraftResponse(BaseModel):
     id: str
     sourceType: str
     processingStatus: str
-    catalogProcessingStatus: str = "not_requested"
     ready: bool
     draft: dict[str, Any] | None = None
     errorMessage: str | None = None
-    catalogErrorMessage: str | None = None
     images: DraftImagesResponse | None = None
     editorImageUrl: str | None = None
     originalImageUrl: str | None = None

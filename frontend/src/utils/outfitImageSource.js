@@ -9,8 +9,6 @@ const IMAGE_SOURCE_FIELDS = [
   "cutoutImageUrl",
   "previewImage",
   "previewImageUrl",
-  "catalogImage",
-  "catalogImageUrl",
   "photo",
   "photoUrl",
 ];

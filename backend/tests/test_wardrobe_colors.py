@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.db.metadata import (
     categories,
     colors,
+    item_drafts,
     item_colors,
     item_seasons,
     item_statuses,
@@ -17,7 +18,6 @@ from app.db.metadata import (
     subcategories,
     users,
     wardrobe_catalogs,
-    wardrobe_item_templates,
 )
 from app.modules.wardrobe.colors import SYSTEM_COLOR_CATALOG
 from app.modules.wardrobe.schemas import ItemPayload
@@ -78,19 +78,6 @@ async def connection():
             ],
         )
         await conn.execute(insert(colors), SYSTEM_COLOR_CATALOG)
-        await conn.execute(
-            insert(wardrobe_item_templates).values(
-                id="template_1",
-                name="Белый топ",
-                category_id="tops",
-                subcategory_name="Топ",
-                brand="",
-                color_ids_json=["white_pure"],
-                seasons_json=["лето", "осень/весна"],
-                styles_json=["office"],
-                sort_order=10,
-            )
-        )
         yield conn
     await engine.dispose()
 
@@ -224,13 +211,27 @@ async def test_create_item_creates_and_reuses_user_style(connection):
 
 
 @pytest.mark.asyncio
-async def test_create_draft_defaults_to_all_seasons_and_empty_styles(connection):
-    draft = await create_draft(connection, "user_1", "catalog", "catalog_main", template_id="template_1")
+async def test_create_draft_initializes_blank_defaults_for_uploaded_item(connection, monkeypatch):
+    async def fake_trigger_prepare_item_photo_task(draft_id: str) -> None:
+        return None
 
-    assert draft.draft is not None
-    assert draft.draft["seasons"] == ["лето", "зима", "осень/весна"]
-    assert draft.draft["styles"] == []
-    assert draft.draft["title"] == ""
+    monkeypatch.setattr(
+        "app.tasks.wardrobe_tasks.trigger_prepare_item_photo_task",
+        fake_trigger_prepare_item_photo_task,
+    )
+
+    draft = await create_draft(connection, "user_1", "photo", "catalog_main", file_id="file_original")
+    row = (
+        await connection.execute(select(item_drafts).where(item_drafts.c.id == draft.id))
+    ).mappings().one()
+
+    assert not draft.ready
+    assert draft.draft is None
+    assert row["suggested_payload_json"]["seasons"] == []
+    assert row["suggested_payload_json"]["styles"] == []
+    assert row["suggested_payload_json"]["title"] == ""
+    assert row["suggested_payload_json"]["categoryId"] == ""
+    assert row["suggested_payload_json"]["subcategory"] == ""
 
 
 @pytest.mark.asyncio

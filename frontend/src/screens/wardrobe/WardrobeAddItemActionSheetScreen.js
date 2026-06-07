@@ -2,7 +2,6 @@ import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../theme/ThemeProvider";
-import { Routes } from "../../navigation/routes";
 import { WARDROBE_PHOTO_MODES, openWardrobePhotoFlow } from "../../utils/wardrobePhotoFlow";
 
 function OptionRow({ icon, title, onPress }) {
@@ -68,11 +67,6 @@ export default function WardrobeAddItemActionSheetScreen({ navigation, route }) 
           icon="image-outline"
           title="Загрузить из галереи"
           onPress={() => openWardrobePhotoFlow({ navigation, mode: WARDROBE_PHOTO_MODES.gallery, catalogId, replace: true })}
-        />
-        <OptionRow
-          icon="grid-outline"
-          title="Выбрать из базового каталога"
-          onPress={() => navigation.replace(Routes.WardrobeAddFromCatalog, catalogId ? { catalogId } : undefined)}
         />
       </View>
     </View>

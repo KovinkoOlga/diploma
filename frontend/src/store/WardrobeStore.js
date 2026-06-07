@@ -37,7 +37,6 @@ export function WardrobeProvider({ children }) {
   const [dictionarySubcategories, setDictionarySubcategories] = useState([]);
   const [dictionaryStyles, setDictionaryStyles] = useState([]);
   const [dictionaryBrands, setDictionaryBrands] = useState([]);
-  const [templates, setTemplates] = useState([]);
   const [outfits, setOutfits] = useState([]);
   const [outfitCollections, setOutfitCollections] = useState([]);
   const [outfitDraftSessions, setOutfitDraftSessions] = useState({});
@@ -58,7 +57,6 @@ export function WardrobeProvider({ children }) {
     setSeasonOptions(bootstrap.seasons ?? []);
     setStyleOptions(bootstrap.styles ?? []);
     setStatusOptions(bootstrap.statuses ?? []);
-    setTemplates(bootstrap.templates ?? []);
     return bootstrap;
   }, []);
 
@@ -298,12 +296,6 @@ export function WardrobeProvider({ children }) {
         setItems((prev) => prev.map((item) => (item.id === itemId ? saved : item)));
         return saved;
       },
-      async restoreItem(itemId) {
-        const saved = await wardrobeApi.updateItem(itemId, { status: "active" });
-        animate();
-        setItems((prev) => prev.map((item) => (item.id === itemId ? saved : item)));
-        return saved;
-      },
       async bulkUpdateItems(itemIds, patch) {
         const savedItems = await wardrobeApi.bulkUpdateItems(itemIds, patch);
         const savedById = Object.fromEntries(savedItems.map((item) => [item.id, item]));
@@ -322,9 +314,6 @@ export function WardrobeProvider({ children }) {
         animate();
         setCatalogs((prev) => prev.map((entry) => (entry.id === catalogId ? catalog : entry)));
         return catalog;
-      },
-      async createDraft(payload) {
-        return wardrobeApi.createDraft(payload);
       },
       async uploadDraftImage(payload) {
         return wardrobeApi.uploadDraftImage(payload);
@@ -350,14 +339,8 @@ export function WardrobeProvider({ children }) {
       advancePhotoBatchEntry(batchId, entryId, update) {
         return advancePhotoBatchEntryState(batchId, entryId, update);
       },
-      async createDraftFromTemplate(templateId, catalogId) {
-        return wardrobeApi.createDraftFromTemplate(templateId, catalogId);
-      },
       async fetchDraft(draftId) {
         return wardrobeApi.fetchDraft(draftId);
-      },
-      async enhanceDraft(draftId) {
-        return wardrobeApi.enhanceDraft(draftId);
       },
       async editDraftMask(draftId, payload) {
         return wardrobeApi.editDraftMask(draftId, payload);
@@ -531,7 +514,6 @@ export function WardrobeProvider({ children }) {
       dictionarySubcategories,
       dictionaryStyles,
       dictionaryBrands,
-      templates,
       outfits,
       outfitCollections,
       outfitDraftSessions,
@@ -558,7 +540,6 @@ export function WardrobeProvider({ children }) {
       seasonOptions,
       statusOptions,
       styleOptions,
-      templates,
     ]
   );
 

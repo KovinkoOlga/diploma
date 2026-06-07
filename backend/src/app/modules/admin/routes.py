@@ -16,7 +16,6 @@ from app.db.metadata import (
     subcategories,
     users,
     wardrobe_catalogs,
-    wardrobe_item_templates,
     wardrobe_items,
 )
 
@@ -59,10 +58,6 @@ class WardrobeItem(Base):
 
 class ItemDraft(Base):
     __table__ = item_drafts
-
-
-class ItemTemplate(Base):
-    __table__ = wardrobe_item_templates
 
 
 class RefreshSession(Base):
@@ -142,18 +137,12 @@ class ItemDraftAdmin(ModelView, model=ItemDraft):
         ItemDraft.user_id,
         ItemDraft.source_type,
         ItemDraft.processing_status,
-        ItemDraft.catalog_processing_status,
         ItemDraft.catalog_id,
         ItemDraft.original_file_id,
         ItemDraft.editor_file_id,
         ItemDraft.processed_file_id,
         ItemDraft.mask_file_id,
-        ItemDraft.catalog_file_id,
     ]
-
-
-class ItemTemplateAdmin(ModelView, model=ItemTemplate):
-    column_list = [ItemTemplate.id, ItemTemplate.name, ItemTemplate.category_id, ItemTemplate.subcategory_name, ItemTemplate.sort_order]
 
 
 class RefreshSessionAdmin(ModelView, model=RefreshSession):
@@ -190,7 +179,6 @@ def setup_admin(app) -> None:
         FileAdmin,
         FileVariantAdmin,
         ItemDraftAdmin,
-        ItemTemplateAdmin,
         RefreshSessionAdmin,
         EmailVerificationCodeAdmin,
     ):

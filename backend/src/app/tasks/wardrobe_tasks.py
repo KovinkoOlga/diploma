@@ -9,7 +9,6 @@ from app.modules.files.service import (
     get_file_bytes,
 )
 from app.modules.ml_clients.vision_client import analyze_item_image
-from app.modules.ml_clients.catalog_client import generate_catalog_image
 from app.modules.wardrobe.image_processing import prepare_square_editor_assets
 from app.modules.wardrobe.service import (
     PRIMARY_ATTRIBUTES_SUGGESTED_STATUS,
@@ -21,12 +20,6 @@ from app.modules.wardrobe.service import (
     save_square_draft_artifacts,
 )
 from app.tasks.celery_app import celery_app, run_async_in_worker
-
-
-CATALOG_NOT_REQUESTED_STATUS = "not_requested"
-CATALOG_PROCESSING_STATUS = "processing"
-CATALOG_READY_STATUS = "ready"
-CATALOG_FAILED_STATUS = "failed"
 
 
 async def _get_draft_row(draft_id: str) -> dict | None:
@@ -209,104 +202,9 @@ async def run_prepare_item_photo(draft_id: str) -> None:
         return
 
 
-async def run_enhance_catalog_photo(draft_id: str) -> None:
-    try:
-        draft = await _get_draft_row(draft_id)
-        if draft is None:
-            return
-        if draft["processing_status"] != PRIMARY_READY_STATUS:
-            raise ValueError("Draft is not ready")
-        if draft.get("catalog_processing_status") == CATALOG_READY_STATUS and draft.get("catalog_file_id"):
-            return
-
-        async with engine.begin() as connection:
-            await connection.execute(
-                update(item_drafts)
-                .where(item_drafts.c.id == draft_id)
-                .values(
-                    catalog_processing_status=CATALOG_PROCESSING_STATUS,
-                    catalog_error_message=None,
-                    updated_at=datetime.now(timezone.utc),
-                )
-            )
-            source_file_id = draft.get("editor_file_id") or draft["original_file_id"]
-            original_bytes = await get_file_bytes(connection, source_file_id, "original")
-            cutout_bytes = await get_file_bytes(connection, draft["processed_file_id"], "cutout")
-            mask_bytes = await get_file_bytes(connection, draft["mask_file_id"], "mask")
-
-        if not original_bytes or not cutout_bytes or not mask_bytes:
-            async with engine.begin() as connection:
-                await connection.execute(
-                    update(item_drafts)
-                    .where(item_drafts.c.id == draft_id)
-                    .values(
-                        catalog_processing_status=CATALOG_FAILED_STATUS,
-                        catalog_error_message="Required ML input variants are unavailable",
-                        updated_at=datetime.now(timezone.utc),
-                    )
-                )
-            return
-
-        started = datetime.now(timezone.utc)
-        filename = await _file_name(draft["original_file_id"])
-        payload = dict(draft.get("suggested_payload_json") or {})
-        result = await generate_catalog_image(
-            original_bytes,
-            cutout_bytes,
-            mask_bytes,
-            filename=filename,
-            category_hint=payload.get("categoryId"),
-        )
-
-        async with engine.begin() as connection:
-            catalog_file_id = draft.get("catalog_file_id") or await create_image_file_with_variants(
-                connection,
-                draft["user_id"],
-                {"catalog": result.catalog_image, "card": result.catalog_image, "thumbnail": result.catalog_image},
-                f"catalog-{filename}",
-                result.mime_type,
-            )
-            ml_result = _merge_ml_result(
-                draft.get("ml_result_json"),
-                "catalog_pipeline",
-                {
-                    "model_used": result.model_used,
-                    "fallback_used": result.fallback_used,
-                    "timings_ms": int((datetime.now(timezone.utc) - started).total_seconds() * 1000),
-                },
-            )
-            await connection.execute(
-                update(item_drafts)
-                .where(item_drafts.c.id == draft_id)
-                .values(
-                    catalog_file_id=catalog_file_id,
-                    catalog_processing_status=CATALOG_READY_STATUS,
-                    ml_result_json=ml_result,
-                    updated_at=datetime.now(timezone.utc),
-                )
-            )
-    except Exception as exc:
-        async with engine.begin() as connection:
-            await connection.execute(
-                update(item_drafts)
-                .where(item_drafts.c.id == draft_id)
-                .values(
-                    catalog_processing_status=CATALOG_FAILED_STATUS,
-                    catalog_error_message=str(exc),
-                    updated_at=datetime.now(timezone.utc),
-                )
-            )
-        return
-
-
 @celery_app.task(name="prepare_item_photo_task")
 def prepare_item_photo_task(draft_id: str) -> None:
     run_async_in_worker(run_prepare_item_photo(draft_id))
-
-
-@celery_app.task(name="enhance_catalog_photo_task")
-def enhance_catalog_photo_task(draft_id: str) -> None:
-    run_async_in_worker(run_enhance_catalog_photo(draft_id))
 
 
 async def trigger_prepare_item_photo_task(draft_id: str) -> None:
@@ -314,10 +212,3 @@ async def trigger_prepare_item_photo_task(draft_id: str) -> None:
         await run_prepare_item_photo(draft_id)
         return
     prepare_item_photo_task.delay(draft_id)
-
-
-async def trigger_enhance_catalog_photo_task(draft_id: str) -> None:
-    if get_settings().celery_task_always_eager:
-        await run_enhance_catalog_photo(draft_id)
-        return
-    enhance_catalog_photo_task.delay(draft_id)

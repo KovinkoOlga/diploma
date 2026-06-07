@@ -271,8 +271,6 @@ async def test_get_draft_generates_square_legacy_assets_and_returns_editor_image
             editor_file_id=None,
             processed_file_id=processed_file_id,
             mask_file_id=mask_file_id,
-            catalog_file_id=None,
-            catalog_processing_status=wardrobe_service.CATALOG_NOT_REQUESTED_STATUS,
             suggested_payload_json={"primaryImageFileId": processed_file_id},
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
@@ -298,7 +296,7 @@ async def test_get_draft_generates_square_legacy_assets_and_returns_editor_image
 
 
 @pytest.mark.asyncio
-async def test_edit_draft_mask_updates_square_asset_ids_and_clears_catalog(connection, mock_storage):
+async def test_edit_draft_mask_updates_square_asset_ids_and_primary_image(connection, mock_storage):
     original_bytes, mask_bytes = build_original_and_mask((300, 420), (90, 50, 210, 380))
     prepared = prepare_square_editor_assets(
         original_bytes,
@@ -317,8 +315,6 @@ async def test_edit_draft_mask_updates_square_asset_ids_and_clears_catalog(conne
         square_mask_bytes=prepared["square_mask_bytes"],
         square_cutout_bytes=prepared["square_cutout_bytes"],
     )
-    catalog_file_id = await store_file(connection, "user_1", "catalog.png", wardrobe_service.square_cutout_variants(prepared["square_cutout_bytes"]))
-
     await connection.execute(
         insert(item_drafts).values(
             id="draft_ready",
@@ -330,8 +326,6 @@ async def test_edit_draft_mask_updates_square_asset_ids_and_clears_catalog(conne
             editor_file_id=square_files["editor_file_id"],
             processed_file_id=square_files["processed_file_id"],
             mask_file_id=square_files["mask_file_id"],
-            catalog_file_id=catalog_file_id,
-            catalog_processing_status=wardrobe_service.CATALOG_READY_STATUS,
             suggested_payload_json={"primaryImageFileId": square_files["processed_file_id"]},
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
@@ -360,6 +354,4 @@ async def test_edit_draft_mask_updates_square_asset_ids_and_clears_catalog(conne
     assert row["editor_file_id"] != square_files["editor_file_id"]
     assert row["processed_file_id"] != square_files["processed_file_id"]
     assert row["mask_file_id"] != square_files["mask_file_id"]
-    assert row["catalog_file_id"] is None
-    assert row["catalog_processing_status"] == wardrobe_service.CATALOG_NOT_REQUESTED_STATUS
     assert updated.draft["primaryImageFileId"] == row["processed_file_id"]
