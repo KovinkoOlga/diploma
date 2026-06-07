@@ -181,6 +181,12 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     syncDraftState(updatedDraftState);
   }, [draftId, route.params?.updatedDraftState, syncDraftState]);
 
+  useEffect(() => {
+    const updatedItem = route.params?.updatedItem;
+    if (!updatedItem || draftId || updatedItem.id !== route.params?.itemId) return;
+    setDraft(normalizeDraft(createDraftFromItem(updatedItem, colorOptions, { seasonOptions, statusOptions }), updatedItem));
+  }, [colorOptions, draftId, normalizeDraft, route.params?.itemId, route.params?.updatedItem, seasonOptions, statusOptions]);
+
   const allowScreenRemoval = useCallback(
     (callback = null) => {
       allowRemoveRef.current = true;
@@ -190,31 +196,53 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
   );
 
   const handleEditMask = useCallback(async () => {
-    if (
-      !draftId ||
-      !draftState?.images?.cutout ||
-      !(draftState?.editorImageUrl || draftState?.originalImagePreviewDataUrl || draftState?.originalImageUrl) ||
-      !draftState?.maskBitmap?.dataBase64
-    ) {
-      return;
-    }
-
     setEditMaskLoading(true);
     try {
-      const latestDraftState = await actions.fetchDraft(draftId);
-      syncDraftState(latestDraftState);
+      if (draftId) {
+        if (
+          !draftState?.images?.cutout ||
+          !(draftState?.editorImageUrl || draftState?.originalImagePreviewDataUrl || draftState?.originalImageUrl) ||
+          !draftState?.maskBitmap?.dataBase64
+        ) {
+          return;
+        }
+
+        const latestDraftState = await actions.fetchDraft(draftId);
+        syncDraftState(latestDraftState);
+        navigation.push(Routes.WardrobeMaskEditor, {
+          draftId,
+          ...(batchId ? { batchId } : {}),
+          ...(currentEntryId ? { entryId: currentEntryId } : {}),
+          returnRouteKey: route.key,
+          editorOpenedAt: Date.now(),
+          cutoutImageUrl: latestDraftState.images?.cutout?.imageUrl ?? draftState.images.cutout.imageUrl,
+          maskImageUrl: latestDraftState.maskImageUrl ?? draftState.maskImageUrl,
+          maskBitmap: latestDraftState.maskBitmap ?? draftState.maskBitmap,
+          editorImageUrl: latestDraftState.editorImageUrl ?? draftState.editorImageUrl,
+          originalImagePreviewDataUrl: latestDraftState.originalImagePreviewDataUrl ?? draftState.originalImagePreviewDataUrl,
+          originalImageUrl: latestDraftState.originalImageUrl ?? draftState.originalImageUrl,
+        });
+        return;
+      }
+
+      if (
+        !existingItem?.maskEditable ||
+        !(existingItem?.editorImageUrl || existingItem?.originalImagePreviewDataUrl || existingItem?.originalImageUrl) ||
+        !existingItem?.maskBitmap?.dataBase64
+      ) {
+        return;
+      }
+
       navigation.push(Routes.WardrobeMaskEditor, {
-        draftId,
-        ...(batchId ? { batchId } : {}),
-        ...(currentEntryId ? { entryId: currentEntryId } : {}),
+        itemId: existingItem.id,
         returnRouteKey: route.key,
         editorOpenedAt: Date.now(),
-        cutoutImageUrl: latestDraftState.images?.cutout?.imageUrl ?? draftState.images.cutout.imageUrl,
-        maskImageUrl: latestDraftState.maskImageUrl ?? draftState.maskImageUrl,
-        maskBitmap: latestDraftState.maskBitmap ?? draftState.maskBitmap,
-        editorImageUrl: latestDraftState.editorImageUrl ?? draftState.editorImageUrl,
-        originalImagePreviewDataUrl: latestDraftState.originalImagePreviewDataUrl ?? draftState.originalImagePreviewDataUrl,
-        originalImageUrl: latestDraftState.originalImageUrl ?? draftState.originalImageUrl,
+        cutoutImageUrl: existingItem.cutoutImageUrl ?? existingItem.imageUrl,
+        maskImageUrl: existingItem.maskImageUrl,
+        maskBitmap: existingItem.maskBitmap,
+        editorImageUrl: existingItem.editorImageUrl,
+        originalImagePreviewDataUrl: existingItem.originalImagePreviewDataUrl,
+        originalImageUrl: existingItem.originalImageUrl ?? existingItem.imageUrl,
       });
     } finally {
       setEditMaskLoading(false);
@@ -225,6 +253,7 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
     currentEntryId,
     draftId,
     draftState,
+    existingItem,
     navigation,
     route.key,
     syncDraftState,
@@ -233,22 +262,28 @@ export default function WardrobeConfirmItemScreen({ navigation, route }) {
   useEffect(() => {
     let alive = true;
 
-    async function loadDraft() {
-      if (!draftId) return;
+    async function loadMaskSource() {
       try {
-        const next = await actions.fetchDraft(draftId);
+        if (draftId) {
+          const next = await actions.fetchDraft(draftId);
+          if (!alive) return;
+          syncDraftState(next);
+          return;
+        }
+
+        if (!route.params?.itemId || existingItem) return;
+        await actions.fetchItem(route.params.itemId);
         if (!alive) return;
-        syncDraftState(next);
       } catch {
         return;
       }
     }
 
-    loadDraft();
+    loadMaskSource();
     return () => {
       alive = false;
     };
-  }, [actions, draftId, route.params?.maskEditedAt, syncDraftState]);
+  }, [actions, draftId, existingItem, route.params?.itemId, syncDraftState]);
 
   const finishBatch = useCallback(
     (itemId = null) => {

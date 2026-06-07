@@ -501,15 +501,18 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { actions } = useWardrobe();
   const draftId = route.params?.draftId;
+  const itemId = route.params?.itemId ?? null;
   const batchId = route.params?.batchId ?? null;
   const entryId = route.params?.entryId ?? null;
   const returnRouteKey = route.params?.returnRouteKey ?? null;
-  const [freshDraft, setFreshDraft] = useState(null);
+  const [freshSource, setFreshSource] = useState(null);
   const hasLocalEditsRef = useRef(false);
-  const editorImageUrl = freshDraft?.editorImageUrl ?? route.params?.editorImageUrl;
-  const originalImageUrl = freshDraft?.originalImageUrl ?? route.params?.originalImageUrl;
-  const originalImagePreviewDataUrl = freshDraft?.originalImagePreviewDataUrl ?? route.params?.originalImagePreviewDataUrl;
-  const maskBitmap = freshDraft?.maskBitmap ?? route.params?.maskBitmap;
+  const editorImageUrl = freshSource?.editorImageUrl ?? route.params?.editorImageUrl;
+  const originalImageUrl = freshSource?.originalImageUrl ?? route.params?.originalImageUrl;
+  const originalImagePreviewDataUrl = freshSource?.originalImagePreviewDataUrl ?? route.params?.originalImagePreviewDataUrl;
+  const maskBitmap = freshSource?.maskBitmap ?? route.params?.maskBitmap;
+  const hasRouteImageSource = Boolean(route.params?.editorImageUrl || route.params?.originalImagePreviewDataUrl || route.params?.originalImageUrl);
+  const hasRouteMaskBitmap = Boolean(route.params?.maskBitmap?.dataBase64);
   const hasMaskBitmap = Boolean(maskBitmap?.width && maskBitmap?.height && maskBitmap?.dataBase64);
   const initialWidth = hasMaskBitmap ? maskBitmap.width : 1;
   const initialHeight = hasMaskBitmap ? maskBitmap.height : 1;
@@ -563,12 +566,20 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
 
   const maskWidth = initialWidth;
   const maskHeight = initialHeight;
-  const imageUrl = editorImageUrl || originalImagePreviewDataUrl || originalImageUrl;
-  const imageSource = useMemo(() => (imageUrl ? { uri: imageUrl } : null), [imageUrl]);
+  const preferredImageUrl = itemId
+    ? originalImagePreviewDataUrl || editorImageUrl || originalImageUrl
+    : editorImageUrl || originalImagePreviewDataUrl || originalImageUrl;
   const maskReady = initialMaskPayload.valid;
   const previewFrameSize = useMemo(
     () => fitRect(editorAreaSize, imageSize.width, imageSize.height),
     [editorAreaSize, imageSize.height, imageSize.width]
+  );
+  const imageLayoutReady = editorAreaSize.width > 1 && editorAreaSize.height > 1 && previewFrameSize.width > 1 && previewFrameSize.height > 1;
+  const imageUrl = imageLayoutReady ? preferredImageUrl : null;
+  const imageSource = useMemo(() => (imageUrl ? { uri: imageUrl } : null), [imageUrl]);
+  const imageRenderKey = useMemo(
+    () => `${draftId ?? itemId ?? "mask"}:${imageLayoutReady ? "ready" : "pending"}:${preferredImageUrl ?? "empty"}`,
+    [draftId, imageLayoutReady, itemId, preferredImageUrl]
   );
   const displayRect = useMemo(() => fitRect(canvasSize, imageSize.width, imageSize.height), [canvasSize, imageSize]);
   const displayRectRef = useRef(displayRect);
@@ -612,22 +623,30 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   useEffect(() => {
     let alive = true;
 
-    async function loadFreshDraft() {
-      if (!draftId) return;
+    async function loadFreshSource() {
       try {
-        const next = await actions.fetchDraft(draftId);
+        if (draftId) {
+          const next = await actions.fetchDraft(draftId);
+          if (!alive || hasLocalEditsRef.current) return;
+          setFreshSource(next);
+          return;
+        }
+
+        if (!itemId || (hasRouteImageSource && hasRouteMaskBitmap)) return;
+
+        const next = await actions.fetchItem(itemId);
         if (!alive || hasLocalEditsRef.current) return;
-        setFreshDraft(next);
+        setFreshSource(next);
       } catch {
         return;
       }
     }
 
-    loadFreshDraft();
+    loadFreshSource();
     return () => {
       alive = false;
     };
-  }, [actions, draftId, route.params?.editorOpenedAt]);
+  }, [actions, draftId, hasRouteImageSource, hasRouteMaskBitmap, itemId, route.params?.editorOpenedAt]);
 
   useEffect(() => {
     setImageLoaded(false);
@@ -943,7 +962,7 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
   };
 
   const save = useCallback(async () => {
-    if (!draftId) return;
+    if (!draftId && !itemId) return;
     if (!maskReady) {
       setError("Маска недоступна для редактирования");
       return;
@@ -958,31 +977,47 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
       const activeStroke = currentStrokeRef.current;
       const saveStrokes = activeStroke?.points?.length ? [...strokesRef.current, activeStroke] : strokesRef.current;
       const finalMaskData = applyStrokesToMask(initialMaskDataRef.current, maskWidth, maskHeight, saveStrokes);
-      const updatedDraftState = await actions.editDraftMask(draftId, {
-        maskFile: {
-          uri: createPgmUri(finalMaskData, maskWidth, maskHeight),
-          name: `wardrobe-mask-${draftId}.pgm`,
-          type: "image/x-portable-graymap",
-        },
+      const maskFile = {
+        uri: createPgmUri(finalMaskData, maskWidth, maskHeight),
+        name: `wardrobe-mask-${draftId ?? itemId}.pgm`,
+        type: "image/x-portable-graymap",
+      };
+
+      if (draftId) {
+        const updatedDraftState = await actions.editDraftMask(draftId, {
+          maskFile,
+          flipHorizontal: flipHorizontalRef.current,
+          rotationDegrees: rotationDegreesRef.current,
+        });
+        if (batchId && entryId) {
+          actions.syncPhotoBatchEntryDraft(batchId, entryId, updatedDraftState);
+        }
+        returnToConfirmScreen({
+          draftId,
+          ...(batchId ? { batchId } : {}),
+          ...(entryId ? { entryId } : {}),
+          maskEditedAt: Date.now(),
+          updatedDraftState,
+        });
+        return;
+      }
+
+      const updatedItem = await actions.editItemMask(itemId, {
+        maskFile,
         flipHorizontal: flipHorizontalRef.current,
         rotationDegrees: rotationDegreesRef.current,
       });
-      if (batchId && entryId) {
-        actions.syncPhotoBatchEntryDraft(batchId, entryId, updatedDraftState);
-      }
       returnToConfirmScreen({
-        draftId,
-        ...(batchId ? { batchId } : {}),
-        ...(entryId ? { entryId } : {}),
+        itemId,
         maskEditedAt: Date.now(),
-        updatedDraftState,
+        updatedItem,
       });
     } catch (saveError) {
       setError(saveError.message || "Не удалось сохранить маску");
     } finally {
       setSaving(false);
     }
-  }, [actions, batchId, draftId, entryId, imageLoaded, maskHeight, maskReady, maskWidth, returnToConfirmScreen]);
+  }, [actions, batchId, draftId, entryId, imageLoaded, itemId, maskHeight, maskReady, maskWidth, returnToConfirmScreen]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -1006,8 +1041,8 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
     });
   }, [colors.background, colors.text, imageLoaded, maskReady, navigation, save, saving]);
 
-  const canEdit = Boolean(imageUrl && maskReady && !imageFailed);
-  const imageErrorMessage = !imageUrl
+  const canEdit = Boolean(imageUrl && maskReady && imageLoaded && !imageFailed);
+  const imageErrorMessage = !preferredImageUrl
     ? "Рабочее изображение недоступно"
     : !maskReady
       ? "Маска недоступна для редактирования"
@@ -1028,27 +1063,32 @@ export default function WardrobeMaskEditorScreen({ navigation, route }) {
           onLayout={handlePreviewLayout}
           {...(canEdit ? panResponder.panHandlers : {})}
         >
-          {imageUrl && maskReady && !imageFailed ? (
+          {preferredImageUrl && maskReady && !imageFailed ? (
             <>
-              <View style={[styles.layerFrame, { transform: previewTransform.reactNativeTransform, transformOrigin: layerTransformOrigin }]}>
-                <MediaPreview
-                  source={imageSource}
-                  resizeMode="contain"
-                  containerStyle={StyleSheet.absoluteFillObject}
-                  onLoad={(event) => {
-                    const nextWidth = event.nativeEvent?.source?.width;
-                    const nextHeight = event.nativeEvent?.source?.height;
-                    if (nextWidth && nextHeight) {
-                      setImageSize({ width: nextWidth, height: nextHeight });
-                    }
-                    setImageLoaded(true);
-                  }}
-                  onError={() => {
-                    setImageLoaded(false);
-                    setImageFailed(true);
-                  }}
-                />
-              </View>
+              {imageUrl ? (
+                <View
+                  key={imageRenderKey}
+                  style={[styles.layerFrame, { transform: previewTransform.reactNativeTransform, transformOrigin: layerTransformOrigin }]}
+                >
+                  <MediaPreview
+                    source={imageSource}
+                    resizeMode="contain"
+                    containerStyle={StyleSheet.absoluteFillObject}
+                    onLoad={(event) => {
+                      const nextWidth = event.nativeEvent?.source?.width;
+                      const nextHeight = event.nativeEvent?.source?.height;
+                      if (nextWidth && nextHeight) {
+                        setImageSize({ width: nextWidth, height: nextHeight });
+                      }
+                      setImageLoaded(true);
+                    }}
+                    onError={() => {
+                      setImageLoaded(false);
+                      setImageFailed(true);
+                    }}
+                  />
+                </View>
+              ) : null}
               <SkiaMaskOverlay
                 overlayUri={overlayUri}
                 displayRect={displayRect}

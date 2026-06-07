@@ -124,6 +124,13 @@ class ItemResponse(BaseModel):
     image: str | None = None
     imageUrl: str | None = None
     primaryImageFileId: str | None = None
+    maskEditable: bool = False
+    editorImageUrl: str | None = None
+    originalImageUrl: str | None = None
+    originalImagePreviewDataUrl: str | None = None
+    maskImageUrl: str | None = None
+    maskBitmap: dict[str, Any] | None = None
+    cutoutImageUrl: str | None = None
 
 
 class BulkUpdatePayload(BaseModel):

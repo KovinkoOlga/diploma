@@ -43,7 +43,12 @@ export function WardrobeProvider({ children }) {
   const [photoBatch, dispatchPhotoBatch] = useReducer(photoBatchReducer, null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const itemsRef = useRef(items);
   const photoBatchRef = useRef(photoBatch);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     photoBatchRef.current = photoBatch;
@@ -102,6 +107,10 @@ export function WardrobeProvider({ children }) {
       setLoading(false);
     }
   }, [refreshBootstrap, refreshDictionaries, refreshItems, refreshOutfitCollections, refreshOutfits]);
+
+  const refreshWardrobeMetadataInBackground = useCallback(() => {
+    Promise.all([refreshBootstrap(), refreshDictionaries()]).catch(() => {});
+  }, [refreshBootstrap, refreshDictionaries]);
 
   useEffect(() => {
     refreshAll();
@@ -254,15 +263,26 @@ export function WardrobeProvider({ children }) {
         const saved = await wardrobeApi.createItem(draft);
         animate();
         setItems((prev) => [saved, ...prev]);
-        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
+        refreshWardrobeMetadataInBackground();
+        return saved;
+      },
+      async fetchItem(itemId) {
+        const saved = await wardrobeApi.fetchItem(itemId);
+        setItems((prev) => {
+          const index = prev.findIndex((item) => item.id === itemId);
+          if (index === -1) return [saved, ...prev];
+          const next = prev.slice();
+          next[index] = saved;
+          return next;
+        });
         return saved;
       },
       async updateItem(itemId, patch) {
-        const current = items.find((item) => item.id === itemId);
+        const current = itemsRef.current.find((item) => item.id === itemId);
         const saved = await wardrobeApi.updateItem(itemId, fallbackPatchValue(patch, current));
         animate();
         setItems((prev) => prev.map((item) => (item.id === itemId ? saved : item)));
-        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
+        refreshWardrobeMetadataInBackground();
         return saved;
       },
       async deleteItem(itemId) {
@@ -301,7 +321,7 @@ export function WardrobeProvider({ children }) {
         const savedById = Object.fromEntries(savedItems.map((item) => [item.id, item]));
         animate();
         setItems((prev) => prev.map((item) => savedById[item.id] ?? item));
-        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
+        refreshWardrobeMetadataInBackground();
       },
       async addCatalog(title) {
         const catalog = await wardrobeApi.createCatalog(title.trim());
@@ -345,11 +365,17 @@ export function WardrobeProvider({ children }) {
       async editDraftMask(draftId, payload) {
         return wardrobeApi.editDraftMask(draftId, payload);
       },
+      async editItemMask(itemId, payload) {
+        const saved = await wardrobeApi.editItemMask(itemId, payload);
+        animate();
+        setItems((prev) => prev.map((item) => (item.id === itemId ? saved : item)));
+        return saved;
+      },
       async confirmDraft(draftId, draft) {
         const saved = await wardrobeApi.confirmDraft(draftId, draft);
         animate();
         setItems((prev) => [saved, ...prev]);
-        await Promise.all([refreshBootstrap(), refreshDictionaries()]);
+        refreshWardrobeMetadataInBackground();
         return saved;
       },
       async renameSubcategory(subcategoryId, name) {
@@ -490,11 +516,11 @@ export function WardrobeProvider({ children }) {
       clearPhotoBatchState,
       createPhotoUploadBatch,
       getPhotoBatchSnapshot,
-      items,
       refreshAll,
       refreshBootstrap,
       refreshDictionaries,
       refreshItems,
+      refreshWardrobeMetadataInBackground,
       refreshOutfitCollections,
       refreshOutfits,
       refreshPhotoBatchEntryState,

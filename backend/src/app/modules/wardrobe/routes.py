@@ -241,6 +241,36 @@ async def patch_item(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
+@router.post("/items/{item_id}/mask-edit", response_model=ItemResponse)
+@router.post("/items/{item_id}/mask-edit/", response_model=ItemResponse, include_in_schema=False)
+async def edit_item_mask(
+    item_id: str,
+    flipHorizontal: bool = Form(False),
+    rotationDegrees: int = Form(0),
+    maskImageBase64: str | None = Form(None),
+    strokes: str | None = Form(None),
+    mask: UploadFile | None = File(None),
+    current_user: dict = Depends(get_current_user),
+    connection: AsyncConnection = Depends(get_connection),
+) -> ItemResponse:
+    try:
+        mask_bytes = await mask.read() if mask is not None else None
+        return await service.edit_item_mask(
+            connection,
+            _user_id(current_user),
+            item_id,
+            mask_bytes=mask_bytes,
+            mask_image_base64=maskImageBase64,
+            flip_horizontal=flipHorizontal,
+            rotation_degrees=rotationDegrees,
+            strokes_json=strokes,
+        )
+    except LookupError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+
+
 @router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(
     item_id: str,

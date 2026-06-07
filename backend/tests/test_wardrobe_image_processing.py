@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.db.metadata import item_drafts, metadata, users, wardrobe_catalogs
+from app.db.metadata import categories, item_drafts, item_statuses, metadata, users, wardrobe_catalogs, wardrobe_items
 from app.modules.files import service as file_service
 from app.modules.files.service import create_image_file_with_variants
 from app.modules.wardrobe import service as wardrobe_service
@@ -60,6 +60,12 @@ async def connection():
         )
         await conn.execute(
             insert(wardrobe_catalogs).values(id="catalog_main", user_id="user_1", name="Основное", sort_order=10, is_default=True)
+        )
+        await conn.execute(
+            insert(categories).values(id="tops", name="Топы", icon_key="shirt-outline", sort_order=10)
+        )
+        await conn.execute(
+            insert(item_statuses).values(id="status_active", code="active", name="Активна", sort_order=10)
         )
         yield conn
     await engine.dispose()
@@ -355,3 +361,186 @@ async def test_edit_draft_mask_updates_square_asset_ids_and_primary_image(connec
     assert row["processed_file_id"] != square_files["processed_file_id"]
     assert row["mask_file_id"] != square_files["mask_file_id"]
     assert updated.draft["primaryImageFileId"] == row["processed_file_id"]
+
+
+@pytest.mark.asyncio
+async def test_confirm_draft_persists_square_mask_source_file_ids_on_item(connection, mock_storage):
+    original_bytes, mask_bytes = build_original_and_mask((300, 420), (90, 50, 210, 380))
+    prepared = prepare_square_editor_assets(
+        original_bytes,
+        mask_bytes,
+        canvas_size=CANVAS_SIZE,
+        padding_ratio=0.22,
+        min_padding_px=48,
+        alpha_threshold=8,
+    )
+    original_file_id = await store_file(
+        connection,
+        "user_1",
+        "original.png",
+        {"original": original_bytes, "card": original_bytes, "thumbnail": original_bytes},
+    )
+    square_files = await wardrobe_service.save_square_draft_artifacts(
+        connection,
+        "user_1",
+        "draft_confirm",
+        square_source_bytes=prepared["square_source_bytes"],
+        square_mask_bytes=prepared["square_mask_bytes"],
+        square_cutout_bytes=prepared["square_cutout_bytes"],
+    )
+    await connection.execute(
+        insert(item_drafts).values(
+            id="draft_confirm",
+            user_id="user_1",
+            source_type="photo",
+            processing_status=wardrobe_service.PRIMARY_READY_STATUS,
+            catalog_id="catalog_main",
+            original_file_id=original_file_id,
+            editor_file_id=square_files["editor_file_id"],
+            processed_file_id=square_files["processed_file_id"],
+            mask_file_id=square_files["mask_file_id"],
+            suggested_payload_json={
+                "title": "Синяя рубашка",
+                "catalogId": "catalog_main",
+                "categoryId": "tops",
+                "subcategory": "Рубашки",
+                "colorIds": [],
+                "brand": "",
+                "seasons": [],
+                "styles": [],
+                "status": "active",
+                "notes": "",
+                "primaryImageFileId": square_files["processed_file_id"],
+            },
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+
+    saved = await wardrobe_service.confirm_draft(connection, "user_1", "draft_confirm")
+    row = (
+        await connection.execute(select(wardrobe_items).where(wardrobe_items.c.id == saved.id))
+    ).mappings().first()
+
+    assert row is not None
+    assert row["original_file_id"] == original_file_id
+    assert row["editor_file_id"] == square_files["editor_file_id"]
+    assert row["mask_file_id"] == square_files["mask_file_id"]
+    assert row["processed_file_id"] == square_files["processed_file_id"]
+    assert row["primary_image_file_id"] == square_files["processed_file_id"]
+    assert saved.maskEditable is True
+    assert saved.editorImageUrl is not None
+    assert saved.cutoutImageUrl is not None
+    assert saved.maskBitmap["width"] == CANVAS_SIZE
+    assert saved.primaryImageFileId == square_files["processed_file_id"]
+
+
+@pytest.mark.asyncio
+async def test_edit_item_mask_updates_item_asset_ids_and_primary_image(connection, mock_storage):
+    original_bytes, mask_bytes = build_original_and_mask((300, 420), (90, 50, 210, 380))
+    prepared = prepare_square_editor_assets(
+        original_bytes,
+        mask_bytes,
+        canvas_size=CANVAS_SIZE,
+        padding_ratio=0.22,
+        min_padding_px=48,
+        alpha_threshold=8,
+    )
+    original_file_id = await store_file(
+        connection,
+        "user_1",
+        "original.png",
+        {"original": original_bytes, "card": original_bytes, "thumbnail": original_bytes},
+    )
+    square_files = await wardrobe_service.save_square_draft_artifacts(
+        connection,
+        "user_1",
+        "item_edit_seed",
+        square_source_bytes=prepared["square_source_bytes"],
+        square_mask_bytes=prepared["square_mask_bytes"],
+        square_cutout_bytes=prepared["square_cutout_bytes"],
+    )
+    await connection.execute(
+        insert(wardrobe_items).values(
+            id="item_ready",
+            user_id="user_1",
+            catalog_id="catalog_main",
+            category_id="tops",
+            subcategory_id=None,
+            primary_image_file_id=square_files["processed_file_id"],
+            original_file_id=original_file_id,
+            editor_file_id=square_files["editor_file_id"],
+            mask_file_id=square_files["mask_file_id"],
+            processed_file_id=square_files["processed_file_id"],
+            status_id="status_active",
+            name="Синяя рубашка",
+            brand_id=None,
+            notes="",
+            attributes_json={},
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+
+    edited_mask = Image.open(BytesIO(prepared["square_mask_bytes"])).convert("L")
+    ImageDraw.Draw(edited_mask).rectangle((0, 0, CANVAS_SIZE, 180), fill=0)
+    updated = await wardrobe_service.edit_item_mask(
+        connection,
+        "user_1",
+        "item_ready",
+        mask_bytes=png_bytes(edited_mask),
+        mask_image_base64=None,
+        flip_horizontal=False,
+        rotation_degrees=180,
+        strokes_json=None,
+    )
+    row = (
+        await connection.execute(select(wardrobe_items).where(wardrobe_items.c.id == "item_ready"))
+    ).mappings().first()
+
+    assert row["original_file_id"] == original_file_id
+    assert row["editor_file_id"] != square_files["editor_file_id"]
+    assert row["mask_file_id"] != square_files["mask_file_id"]
+    assert row["processed_file_id"] != square_files["processed_file_id"]
+    assert row["primary_image_file_id"] == row["processed_file_id"]
+    assert updated.primaryImageFileId == row["processed_file_id"]
+    assert updated.maskEditable is True
+    assert updated.imageUrl == updated.cutoutImageUrl
+    assert updated.maskBitmap["width"] == CANVAS_SIZE
+
+
+@pytest.mark.asyncio
+async def test_edit_item_mask_requires_existing_editor_and_mask_sources(connection, mock_storage):
+    await connection.execute(
+        insert(wardrobe_items).values(
+            id="item_plain",
+            user_id="user_1",
+            catalog_id="catalog_main",
+            category_id="tops",
+            subcategory_id=None,
+            primary_image_file_id=None,
+            original_file_id=None,
+            editor_file_id=None,
+            mask_file_id=None,
+            processed_file_id=None,
+            status_id="status_active",
+            name="Обычная вещь",
+            brand_id=None,
+            notes="",
+            attributes_json={},
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+
+    with pytest.raises(ValueError, match="исходников для редактирования маски"):
+        await wardrobe_service.edit_item_mask(
+            connection,
+            "user_1",
+            "item_plain",
+            mask_bytes=None,
+            mask_image_base64=None,
+            flip_horizontal=False,
+            rotation_degrees=0,
+            strokes_json=None,
+        )

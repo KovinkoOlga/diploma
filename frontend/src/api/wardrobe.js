@@ -37,6 +37,10 @@ export async function fetchItems(filters = {}) {
   return items.map(normalizeRemoteImage);
 }
 
+export async function fetchItem(itemId) {
+  return normalizeRemoteImage(await apiGet(`/wardrobe/items/${itemId}`));
+}
+
 export async function createItem(payload) {
   return normalizeRemoteImage(await apiPost("/wardrobe/items", payload));
 }
@@ -129,6 +133,18 @@ export async function editDraftMask(draftId, { maskFile, maskImageBase64, flipHo
     draft.draft = normalizeRemoteImage(draft.draft);
   }
   return draft;
+}
+
+export async function editItemMask(itemId, { maskFile, maskImageBase64, flipHorizontal, rotationDegrees }) {
+  const formData = new FormData();
+  formData.append("flipHorizontal", flipHorizontal ? "true" : "false");
+  formData.append("rotationDegrees", String(rotationDegrees ?? 0));
+  if (maskFile) {
+    formData.append("mask", maskFile);
+  } else if (maskImageBase64) {
+    formData.append("maskImageBase64", maskImageBase64);
+  }
+  return normalizeRemoteImage(await apiPost(`/wardrobe/items/${itemId}/mask-edit`, formData));
 }
 
 export async function confirmDraft(draftId, payload) {

@@ -2,7 +2,7 @@ import base64
 import json
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Any
+from typing import Any, TypedDict
 
 from pydantic import ValidationError
 from sqlalchemy import and_, delete, func, insert, or_, select, update
@@ -88,6 +88,13 @@ CONFIRM_DRAFT_FIELD_LABELS = {
     "primaryImageFileId": "изображение вещи",
     "status": "статус",
 }
+
+
+class ItemImageFileIds(TypedDict, total=False):
+    original_file_id: str | None
+    editor_file_id: str | None
+    mask_file_id: str | None
+    processed_file_id: str | None
 
 
 def normalize_name(value: str) -> str:
@@ -906,12 +913,29 @@ async def _item_links(connection: AsyncConnection, item_id: str) -> tuple[list[C
     return [_color_response(dict(row)) for row in color_rows], list(season_rows), list(style_rows)
 
 
+def _item_mask_editable(row: dict[str, Any]) -> bool:
+    return bool(row.get("editor_file_id") and row.get("mask_file_id") and row.get("processed_file_id"))
+
+
 async def serialize_item(connection: AsyncConnection, row: dict) -> ItemResponse:
     color_details, season_names, style_names = await _item_links(connection, row["id"])
     outfit_count = (
         await connection.execute(select(func.count()).select_from(outfit_items).where(outfit_items.c.item_id == row["id"]))
     ).scalar_one()
     image_url = await get_file_url(connection, row.get("primary_image_file_id"), "card")
+    editor_url = await get_file_url(connection, row.get("editor_file_id"), "card")
+    original_url = await get_file_url(connection, row.get("original_file_id"), "original")
+    if original_url is None:
+        original_url = await get_file_url(connection, row.get("original_file_id"), "card")
+    cutout_url = await get_file_url(connection, row.get("processed_file_id"), "card")
+    mask_url = await get_file_url(connection, row.get("mask_file_id"), "mask")
+    mask_bitmap = await _mask_bitmap_payload(connection, row.get("mask_file_id"))
+    original_preview_data_url = None
+    if _item_mask_editable(row):
+        original_preview_data_url = await _editor_preview_data_url(
+            connection,
+            row.get("editor_file_id") or row.get("original_file_id"),
+        )
     created_at = row["created_at"]
     created = created_at.date().isoformat() if isinstance(created_at, datetime) else str(created_at)
     status = row["status_code"]
@@ -936,6 +960,13 @@ async def serialize_item(connection: AsyncConnection, row: dict) -> ItemResponse
         image=image_url,
         imageUrl=image_url,
         primaryImageFileId=row.get("primary_image_file_id"),
+        maskEditable=_item_mask_editable(row),
+        editorImageUrl=editor_url,
+        originalImageUrl=original_url,
+        originalImagePreviewDataUrl=original_preview_data_url,
+        maskImageUrl=mask_url,
+        maskBitmap=mask_bitmap,
+        cutoutImageUrl=cutout_url,
     )
 
 
@@ -1045,16 +1076,37 @@ async def get_item(connection: AsyncConnection, user_id: str, item_id: str) -> I
     return await serialize_item(connection, dict(row))
 
 
-async def create_item(connection: AsyncConnection, user_id: str, payload: ItemPayload) -> ItemResponse:
+async def _load_item_row(connection: AsyncConnection, user_id: str, item_id: str) -> dict[str, Any]:
+    row = (
+        await connection.execute(
+            select(wardrobe_items).where(wardrobe_items.c.id == item_id, wardrobe_items.c.user_id == user_id)
+        )
+    ).mappings().first()
+    if row is None:
+        raise LookupError("Item not found")
+    return dict(row)
+
+
+async def create_item(
+    connection: AsyncConnection,
+    user_id: str,
+    payload: ItemPayload,
+    image_file_ids: ItemImageFileIds | None = None,
+) -> ItemResponse:
     item_id = new_id("item")
     subcategory_id = await _ensure_subcategory(connection, user_id, payload.categoryId, payload.subcategory)
+    processed_file_id = (image_file_ids or {}).get("processed_file_id")
     values = {
         "id": item_id,
         "user_id": user_id,
         "catalog_id": payload.catalogId,
         "category_id": payload.categoryId,
         "subcategory_id": subcategory_id,
-        "primary_image_file_id": payload.primaryImageFileId,
+        "primary_image_file_id": processed_file_id or payload.primaryImageFileId,
+        "original_file_id": (image_file_ids or {}).get("original_file_id"),
+        "editor_file_id": (image_file_ids or {}).get("editor_file_id"),
+        "mask_file_id": (image_file_ids or {}).get("mask_file_id"),
+        "processed_file_id": processed_file_id,
         "status_id": await _status_id(connection, payload.status),
         "name": payload.title.strip(),
         "brand_id": await _ensure_brand(connection, user_id, payload.brand),
@@ -1590,6 +1642,60 @@ async def edit_draft_mask(
     return await get_draft(connection, user_id, draft_id)
 
 
+async def edit_item_mask(
+    connection: AsyncConnection,
+    user_id: str,
+    item_id: str,
+    *,
+    mask_bytes: bytes | None,
+    mask_image_base64: str | None,
+    flip_horizontal: bool,
+    rotation_degrees: int,
+    strokes_json: str | None,
+) -> ItemResponse:
+    row = await _load_item_row(connection, user_id, item_id)
+    if not row.get("editor_file_id") or not row.get("mask_file_id"):
+        raise ValueError("У этой вещи нет исходников для редактирования маски")
+
+    square_source_bytes = await get_file_bytes(connection, row["editor_file_id"], "original")
+    existing_mask_bytes = await get_file_bytes(connection, row["mask_file_id"], "mask")
+    if not square_source_bytes:
+        raise ValueError("Рабочее изображение для редактирования маски недоступно")
+    if not existing_mask_bytes:
+        raise ValueError("Маска для редактирования недоступна")
+
+    edited_mask_bytes = mask_bytes or pgm_mask_bytes_from_base64(mask_image_base64)
+    new_square_source_bytes, new_mask_bytes, cutout_bytes = rebuild_square_draft_assets_from_mask(
+        square_source_bytes,
+        existing_mask_bytes,
+        edited_mask_bytes,
+        flip_horizontal=flip_horizontal,
+        rotation_degrees=rotation_degrees,
+        strokes_json=strokes_json,
+    )
+    saved_file_ids = await save_square_draft_artifacts(
+        connection,
+        user_id,
+        f"{item_id}-mask-edit",
+        square_source_bytes=new_square_source_bytes,
+        square_mask_bytes=new_mask_bytes,
+        square_cutout_bytes=cutout_bytes,
+    )
+
+    await connection.execute(
+        update(wardrobe_items)
+        .where(wardrobe_items.c.id == item_id, wardrobe_items.c.user_id == user_id)
+        .values(
+            editor_file_id=saved_file_ids["editor_file_id"],
+            mask_file_id=saved_file_ids["mask_file_id"],
+            processed_file_id=saved_file_ids["processed_file_id"],
+            primary_image_file_id=saved_file_ids["processed_file_id"],
+            updated_at=datetime.now(timezone.utc),
+        )
+    )
+    return await get_item(connection, user_id, item_id)
+
+
 def _blank(value: Any) -> bool:
     return not str(value or "").strip()
 
@@ -1679,6 +1785,7 @@ async def _validate_confirm_draft_payload(
 async def confirm_draft(connection: AsyncConnection, user_id: str, draft_id: str, override: ItemPatch | None = None) -> ItemResponse:
     row = await _load_draft_row(connection, user_id, draft_id)
     draft = await _serialize_draft(connection, row)
+    row = await _load_draft_row(connection, user_id, draft_id)
     if not draft.ready or not draft.draft:
         raise ValueError("Draft is not ready")
     data = dict(draft.draft)
@@ -1693,4 +1800,14 @@ async def confirm_draft(connection: AsyncConnection, user_id: str, draft_id: str
         payload = ItemPayload(**data)
     except ValidationError as exc:
         raise ValueError(_draft_validation_error_from_pydantic(exc)) from exc
-    return await create_item(connection, user_id, payload)
+    return await create_item(
+        connection,
+        user_id,
+        payload,
+        image_file_ids={
+            "original_file_id": row.get("original_file_id"),
+            "editor_file_id": row.get("editor_file_id"),
+            "mask_file_id": row.get("mask_file_id"),
+            "processed_file_id": row.get("processed_file_id"),
+        },
+    )
