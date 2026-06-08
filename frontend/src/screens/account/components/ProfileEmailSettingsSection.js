@@ -10,19 +10,6 @@ import { useAppTheme } from "../../../theme/ThemeProvider";
 import { useAuth } from "../../../store/AuthStore";
 import { getAuthErrorMessage, isValidEmail, normalizeEmail } from "../../../utils/authFlow";
 
-
-function EmailStatus({ label, value, status }) {
-  const { colors, typography, spacing } = useAppTheme();
-  return (
-    <View style={{ gap: 4 }}>
-      <Text style={[typography.meta, { color: colors.secondaryText }]}>{label}</Text>
-      <Text style={[typography.body, { color: colors.text }]}>{value || "—"}</Text>
-      <Text style={[typography.caption, { color: colors.secondaryText, marginBottom: spacing.sm }]}>{status}</Text>
-    </View>
-  );
-}
-
-
 export default function ProfileEmailSettingsSection() {
   const { colors, typography, spacing, radius } = useAppTheme();
   const {
@@ -37,6 +24,7 @@ export default function ProfileEmailSettingsSection() {
 
   const [primaryEmail, setPrimaryEmail] = useState("");
   const [primaryCode, setPrimaryCode] = useState("");
+  const [showPrimaryEditor, setShowPrimaryEditor] = useState(false);
   const [primaryNextResendAt, setPrimaryNextResendAt] = useState(null);
   const [primarySubmitting, setPrimarySubmitting] = useState(false);
   const [primaryResendLoading, setPrimaryResendLoading] = useState(false);
@@ -44,6 +32,7 @@ export default function ProfileEmailSettingsSection() {
 
   const [backupEmailInput, setBackupEmailInput] = useState(currentUser?.backupEmail ?? "");
   const [backupCode, setBackupCode] = useState("");
+  const [showBackupEditor, setShowBackupEditor] = useState(!currentUser?.backupEmail);
   const [backupNextResendAt, setBackupNextResendAt] = useState(null);
   const [backupSubmitting, setBackupSubmitting] = useState(false);
   const [backupResendLoading, setBackupResendLoading] = useState(false);
@@ -52,69 +41,13 @@ export default function ProfileEmailSettingsSection() {
 
   useEffect(() => {
     setBackupEmailInput(currentUser?.backupEmail ?? "");
+    setShowBackupEditor(!currentUser?.backupEmail);
   }, [currentUser?.backupEmail]);
 
   const normalizedPrimaryEmail = normalizeEmail(primaryEmail);
   const normalizedStoredBackupEmail = normalizeEmail(currentUser?.backupEmail ?? "");
   const normalizedBackupInput = normalizeEmail(backupEmailInput);
   const backupEmailChanged = normalizedBackupInput !== normalizedStoredBackupEmail;
-
-  const activeCodeModal = useMemo(() => {
-    if (codeModalType === "primary") {
-      return {
-        title: "Подтвердите новую почту",
-        description: `Мы отправили код на ${normalizedPrimaryEmail}`,
-        code: primaryCode,
-        onChangeCode: (value) => {
-          setPrimaryCode(value.replace(/\D/g, ""));
-          setPrimaryError("");
-        },
-        onSubmit: handlePrimaryVerifyCode,
-        onResend: handlePrimaryResend,
-        onBack: closeCodeModal,
-        submitting: primarySubmitting,
-        resendLoading: primaryResendLoading,
-        nextResendAt: primaryNextResendAt,
-        error: primaryError,
-      };
-    }
-
-    if (codeModalType === "backup") {
-      return {
-        title: "Подтвердите резервную почту",
-        description: `Мы отправили код на ${normalizeEmail(currentUser?.backupEmail || backupEmailInput)}`,
-        code: backupCode,
-        onChangeCode: (value) => {
-          setBackupCode(value.replace(/\D/g, ""));
-          setBackupError("");
-        },
-        onSubmit: handleBackupVerifyCode,
-        onResend: handleBackupRequestExisting,
-        onBack: closeCodeModal,
-        submitting: backupSubmitting,
-        resendLoading: backupResendLoading,
-        nextResendAt: backupNextResendAt,
-        error: backupError,
-      };
-    }
-
-    return null;
-  }, [
-    backupCode,
-    backupEmailInput,
-    backupError,
-    backupNextResendAt,
-    backupResendLoading,
-    backupSubmitting,
-    codeModalType,
-    currentUser?.backupEmail,
-    normalizedPrimaryEmail,
-    primaryCode,
-    primaryError,
-    primaryNextResendAt,
-    primaryResendLoading,
-    primarySubmitting,
-  ]);
 
   function closeCodeModal() {
     setCodeModalType(null);
@@ -143,6 +76,7 @@ export default function ProfileEmailSettingsSection() {
     try {
       await verifyPrimaryEmailChange(normalizedPrimaryEmail, primaryCode.trim());
       setPrimaryEmail("");
+      setShowPrimaryEditor(false);
       setPrimaryCode("");
       setPrimaryNextResendAt(null);
       closeCodeModal();
@@ -207,6 +141,7 @@ export default function ProfileEmailSettingsSection() {
     try {
       await verifyBackupEmailCode(backupCode.trim());
       setBackupCode("");
+      setShowBackupEditor(false);
       setBackupNextResendAt(null);
       closeCodeModal();
     } catch (error) {
@@ -230,6 +165,7 @@ export default function ProfileEmailSettingsSection() {
               setBackupError("");
               await deleteBackupEmail();
               setBackupEmailInput("");
+              setShowBackupEditor(true);
               setBackupCode("");
               setBackupNextResendAt(null);
               if (codeModalType === "backup") {
@@ -244,35 +180,104 @@ export default function ProfileEmailSettingsSection() {
     );
   }
 
+  const activeCodeModal = useMemo(() => {
+    if (codeModalType === "primary") {
+      return {
+        title: "Подтвердите новую почту",
+        description: `Мы отправили код на ${normalizedPrimaryEmail}`,
+        code: primaryCode,
+        onChangeCode: (value) => {
+          setPrimaryCode(value.replace(/\D/g, ""));
+          setPrimaryError("");
+        },
+        onSubmit: handlePrimaryVerifyCode,
+        onResend: handlePrimaryResend,
+        onBack: closeCodeModal,
+        submitting: primarySubmitting,
+        resendLoading: primaryResendLoading,
+        nextResendAt: primaryNextResendAt,
+        error: primaryError,
+      };
+    }
+
+    if (codeModalType === "backup") {
+      return {
+        title: "Подтвердите резервную почту",
+        description: `Мы отправили код на ${normalizeEmail(currentUser?.backupEmail || backupEmailInput)}`,
+        code: backupCode,
+        onChangeCode: (value) => {
+          setBackupCode(value.replace(/\D/g, ""));
+          setBackupError("");
+        },
+        onSubmit: handleBackupVerifyCode,
+        onResend: handleBackupRequestExisting,
+        onBack: closeCodeModal,
+        submitting: backupSubmitting,
+        resendLoading: backupResendLoading,
+        nextResendAt: backupNextResendAt,
+        error: backupError,
+      };
+    }
+
+    return null;
+  }, [
+    backupCode,
+    backupEmailInput,
+    backupError,
+    backupNextResendAt,
+    backupResendLoading,
+    backupSubmitting,
+    codeModalType,
+    currentUser?.backupEmail,
+    normalizedPrimaryEmail,
+    primaryCode,
+    primaryError,
+    primaryNextResendAt,
+    primaryResendLoading,
+    primarySubmitting,
+  ]);
+
   return (
     <>
       <View>
         <SectionHeader title="Основная почта" />
         <View style={{ marginTop: spacing.sm }}>
           <Card style={{ padding: spacing.lg, borderRadius: radius.lg }}>
-            <EmailStatus label="Текущая почта" value={currentUser?.email} status="Подтверждена" />
-            <Input
-              value={primaryEmail}
-              onChangeText={(value) => {
-                setPrimaryEmail(value);
-                setPrimaryError("");
-              }}
-              placeholder="new@example.com"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-            />
-            {primaryError ? (
-              <Text style={[typography.body, { color: colors.danger, marginTop: 8 }]}>{primaryError}</Text>
-            ) : null}
-            <ActionButton
-              label={primarySubmitting ? "Подождите..." : "Получить код"}
-              icon="mail-outline"
-              onPress={handlePrimaryRequestCode}
-              disabled={primarySubmitting || !isValidEmail(normalizedPrimaryEmail)}
-              style={{ marginTop: spacing.md }}
-              fullWidth
-            />
+            <Text style={[typography.body, { color: colors.text }]}>{currentUser?.email}</Text>
+            {showPrimaryEditor ? (
+              <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
+                <Input
+                  value={primaryEmail}
+                  onChangeText={(value) => {
+                    setPrimaryEmail(value);
+                    setPrimaryError("");
+                  }}
+                  placeholder="new@example.com"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+                {primaryError ? <Text style={[typography.body, { color: colors.danger }]}>{primaryError}</Text> : null}
+                <ActionButton
+                  label={primarySubmitting ? "Подождите..." : "Получить код"}
+                  icon="mail-outline"
+                  onPress={handlePrimaryRequestCode}
+                  disabled={primarySubmitting || !isValidEmail(normalizedPrimaryEmail)}
+                  fullWidth
+                />
+              </View>
+            ) : (
+              <ActionButton
+                label="Сменить"
+                variant="secondary"
+                onPress={() => {
+                  setShowPrimaryEditor(true);
+                  setPrimaryError("");
+                }}
+                style={{ marginTop: spacing.md }}
+                fullWidth
+              />
+            )}
           </Card>
         </View>
       </View>
@@ -281,37 +286,42 @@ export default function ProfileEmailSettingsSection() {
         <SectionHeader title="Резервная почта" />
         <View style={{ marginTop: spacing.sm }}>
           <Card style={{ padding: spacing.lg, borderRadius: radius.lg }}>
-            <EmailStatus
-              label="Текущая резервная почта"
-              value={currentUser?.backupEmail || "Резервная почта не указана"}
-              status={
-                currentUser?.backupEmail
-                  ? currentUser?.backupEmailVerified
-                    ? "Подтверждена"
-                    : "Не подтверждена"
-                  : "Не указана"
-              }
-            />
-            <View style={{ gap: spacing.sm }}>
-              <Input
-                value={backupEmailInput}
-                onChangeText={(value) => {
-                  setBackupEmailInput(value);
-                  setBackupError("");
-                }}
-                placeholder="backup@example.com"
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-              />
-              {backupError ? <Text style={[typography.body, { color: colors.danger }]}>{backupError}</Text> : null}
-              <ActionButton
-                label={backupSubmitting ? "Подождите..." : currentUser?.backupEmail ? "Изменить и получить код" : "Добавить и получить код"}
-                icon="mail-outline"
-                onPress={handleBackupSaveAndRequest}
-                disabled={backupSubmitting || !isValidEmail(normalizedBackupInput) || !backupEmailChanged}
-                fullWidth
-              />
+            {currentUser?.backupEmail ? <Text style={[typography.body, { color: colors.text }]}>{currentUser.backupEmail}</Text> : null}
+            <View style={{ gap: spacing.sm, marginTop: currentUser?.backupEmail ? spacing.md : 0 }}>
+              {showBackupEditor ? (
+                <>
+                  <Input
+                    value={backupEmailInput}
+                    onChangeText={(value) => {
+                      setBackupEmailInput(value);
+                      setBackupError("");
+                    }}
+                    placeholder="backup@example.com"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                  />
+                  {backupError ? <Text style={[typography.body, { color: colors.danger }]}>{backupError}</Text> : null}
+                  <ActionButton
+                    label={backupSubmitting ? "Подождите..." : "Получить код"}
+                    icon="mail-outline"
+                    onPress={handleBackupSaveAndRequest}
+                    disabled={backupSubmitting || !isValidEmail(normalizedBackupInput) || !backupEmailChanged}
+                    fullWidth
+                  />
+                </>
+              ) : (
+                <ActionButton
+                  label="Сменить"
+                  variant="secondary"
+                  onPress={() => {
+                    setShowBackupEditor(true);
+                    setBackupEmailInput(currentUser?.backupEmail ?? "");
+                    setBackupError("");
+                  }}
+                  fullWidth
+                />
+              )}
               {currentUser?.backupEmail && !currentUser?.backupEmailVerified ? (
                 <ActionButton
                   label={backupResendLoading ? "Подождите..." : "Подтвердить текущую почту"}

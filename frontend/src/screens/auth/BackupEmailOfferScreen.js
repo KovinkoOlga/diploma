@@ -68,7 +68,7 @@ export default function BackupEmailOfferScreen() {
 
   if (step === "code") {
     return (
-      <Screen padded withKeyboard>
+      <Screen padded withKeyboard contentStyle={{ justifyContent: "center" }}>
         <EmailCodeCard
           title="Подтвердите резервную почту"
           description={`Мы отправили код на ${normalizedBackupEmail}`}
@@ -88,16 +88,17 @@ export default function BackupEmailOfferScreen() {
           resendLoading={resendLoading}
           nextResendAt={nextResendAt}
           error={error}
+          marginTop={0}
+          codeInputVariant="otp"
         />
       </Screen>
     );
   }
 
   return (
-    <Screen padded withKeyboard>
+    <Screen padded withKeyboard contentStyle={{ justifyContent: "center" }}>
       <View
         style={{
-          marginTop: spacing.xxl,
           borderRadius: radius.xl,
           backgroundColor: colors.secondaryBackground,
           padding: spacing.lg,

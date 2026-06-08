@@ -26,7 +26,15 @@ export default function AccountStack() {
     >
       <Stack.Screen name={Routes.AccountHome} component={AccountHomeScreen} options={{ headerShown: false }} />
       <Stack.Screen name={Routes.Settings} component={SettingsScreen} options={{ title: "Настройки" }} />
-      <Stack.Screen name={Routes.ProfileSettings} component={ProfileSettingsScreen} options={{ title: "Личные данные" }} />
+      <Stack.Screen
+        name={Routes.ProfileSettings}
+        component={ProfileSettingsScreen}
+        options={{
+          title: "Личные данные",
+          headerBackButtonDisplayMode: "minimal",
+          headerTitleStyle: { ...theme.typography.h2, color: theme.colors.text },
+        }}
+      />
     </Stack.Navigator>
   );
 }

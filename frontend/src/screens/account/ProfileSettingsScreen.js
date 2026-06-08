@@ -13,7 +13,7 @@ import ProfileEmailSettingsSection from "./components/ProfileEmailSettingsSectio
 
 function buildGalleryPermissionMessage(permission) {
   if (permission?.canAskAgain === false) {
-    return "Доступ к галерее запрещён. Разрешите его в настройках устройства, чтобы загрузить аватар.";
+    return "Доступ к галерее запрещен. Разрешите его в настройках устройства, чтобы загрузить аватар.";
   }
 
   return "Разрешите доступ к галерее, чтобы выбрать фотографию для аватара.";
@@ -73,29 +73,26 @@ export default function ProfileSettingsScreen({ navigation }) {
   return (
     <Screen scroll padded withKeyboard>
       <View style={{ gap: spacing.lg }}>
-        <View>
-          <SectionHeader title="Личные данные" />
-          <View style={{ marginTop: spacing.sm }}>
-            <Card style={{ padding: spacing.lg, borderRadius: radius.lg, alignItems: "center" }}>
-              <Avatar size={96} label={avatarLabel} source={avatarSource} />
-              <Text style={[typography.cardTitle, { color: colors.text, marginTop: spacing.md }]}>{avatarLabel}</Text>
+        <View style={{ marginTop: spacing.sm }}>
+          <Card style={{ padding: spacing.lg, borderRadius: radius.lg, alignItems: "center" }}>
+            <Avatar size={96} label={avatarLabel} source={avatarSource} />
+            <Text style={[typography.cardTitle, { color: colors.text, marginTop: spacing.md }]}>{avatarLabel}</Text>
 
-              <View style={{ marginTop: spacing.md }}>
-                <ActionButton
-                  label={avatarUploading ? "Загружаем..." : currentUser?.avatarUrl ? "Заменить фото" : "Загрузить аватар"}
-                  icon="image-outline"
-                  variant="secondary"
-                  disabled={avatarUploading}
-                  onPress={handleAvatarPress}
-                />
-              </View>
-              {avatarError ? (
-                <Text style={[typography.caption, { color: colors.danger, marginTop: spacing.sm, textAlign: "center" }]}>
-                  {avatarError}
-                </Text>
-              ) : null}
-            </Card>
-          </View>
+            <View style={{ marginTop: spacing.md }}>
+              <ActionButton
+                label={avatarUploading ? "Загружаем..." : currentUser?.avatarUrl ? "Заменить фото" : "Загрузить аватар"}
+                icon="image-outline"
+                variant="secondary"
+                disabled={avatarUploading}
+                onPress={handleAvatarPress}
+              />
+            </View>
+            {avatarError ? (
+              <Text style={[typography.caption, { color: colors.danger, marginTop: spacing.sm, textAlign: "center" }]}>
+                {avatarError}
+              </Text>
+            ) : null}
+          </Card>
         </View>
 
         <View>
